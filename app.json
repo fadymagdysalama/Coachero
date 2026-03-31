@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Athnova",
-    "slug": "Athnova",
+    "name": "Coachera",
+    "slug": "Coachera",
     "version": "1.0.0",
-    "scheme": "athnova",
+    "scheme": "coachera",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.athnova.app"
+      "bundleIdentifier": "com.coachera.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.athnova.app"
+      "package": "com.coachera.app"
     },
     "web": {
       "favicon": "./assets/favicon.png",

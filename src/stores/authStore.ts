@@ -63,7 +63,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Supabase Auth requires an email. We derive a fake email from the username.
     // The real identity is the username stored in the profiles table.
     const cleanUsername = username.toLowerCase();
-    const fakeEmail = `${cleanUsername}@athnova.app`;
+    const fakeEmail = `${cleanUsername}@coachera.app`;
 
     const { error: signUpError } = await supabase.auth.signUp({
       email: fakeEmail,
@@ -93,7 +93,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signIn: async (username: string, password: string) => {
-    const fakeEmail = `${username.toLowerCase()}@athnova.app`;
+    const fakeEmail = `${username.toLowerCase()}@coachera.app`;
 
     const { error } = await supabase.auth.signInWithPassword({
       email: fakeEmail,

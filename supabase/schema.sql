@@ -1,5 +1,5 @@
 -- =====================================================
--- ATHNOVA DATABASE SCHEMA
+-- COACHERA DATABASE SCHEMA
 -- Run this in Supabase SQL Editor (supabase.com/dashboard)
 -- =====================================================
 

@@ -13,7 +13,7 @@ export default {
     or: 'أو',
   },
   auth: {
-    welcome: 'مرحباً في Athnova',
+    welcome: 'مرحباً في Coachera',
     tagline: 'تمرّن بذكاء. درّب بأفضل طريقة.',
     signIn: 'تسجيل الدخول',
     signUp: 'إنشاء حساب',

@@ -1,4 +1,4 @@
-# Athnova
+# Coachera
 
 A mobile-first fitness coaching platform built with React Native (Expo) and Supabase.
 

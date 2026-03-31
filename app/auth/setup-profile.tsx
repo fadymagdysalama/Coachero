@@ -28,7 +28,7 @@ export default function SetupProfileScreen() {
   // Use pendingUsername from store (set during signup), derived from session email as fallback
   const derivedUsername =
     pendingUsername ||
-    session?.user?.email?.replace('@athnova.app', '') ||
+    session?.user?.email?.replace('@coachera.app', '') ||
     '';
 
   const [username, setUsername] = useState(derivedUsername);

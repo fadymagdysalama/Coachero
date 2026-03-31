@@ -72,7 +72,7 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <Text style={styles.version}>Athnova v1.0.0</Text>
+        <Text style={styles.version}>Coachera v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );

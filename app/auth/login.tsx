@@ -63,7 +63,7 @@ export default function LoginScreen() {
         >
           {/* Logo / Header */}
           <View style={styles.header}>
-            <Text style={styles.logo}>ATHNOVA</Text>
+            <Text style={styles.logo}>COACHERA</Text>
             <Text style={styles.tagline}>{t('auth.tagline')}</Text>
           </View>
 

@@ -13,7 +13,7 @@ export default {
     or: 'or',
   },
   auth: {
-    welcome: 'Welcome to Athnova',
+    welcome: 'Welcome to Coachera',
     tagline: 'Train smarter. Coach better.',
     signIn: 'Sign In',
     signUp: 'Sign Up',
