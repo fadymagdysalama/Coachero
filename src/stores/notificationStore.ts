@@ -23,9 +23,16 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   fetchNotifications: async () => {
     set({ isLoading: true });
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      set({ notifications: [], unreadCount: 0, isLoading: false });
+      return;
+    }
+
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
 

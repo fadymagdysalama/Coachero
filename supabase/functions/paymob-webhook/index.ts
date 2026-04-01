@@ -108,31 +108,59 @@ Deno.serve(async (req) => {
     });
   }
 
-  // merchant_order_id format: "programId__userId__timestamp"
+  // merchantOrderId format:
+  //   Subscriptions: "sub__{tier}__{coachId}__{timestamp}"
+  //   Program purchases: "{programId}__{userId}__{timestamp}"
   const order = transaction.order as Record<string, unknown>;
   const merchantOrderId = String(order?.merchant_order_id ?? '');
-  const [programId, userId] = merchantOrderId.split('__');
-
-  if (!programId || !userId) {
-    console.error('Cannot extract programId/userId from merchant_order_id:', merchantOrderId);
-    return new Response('Invalid merchant_order_id', { status: 400 });
-  }
+  const parts = merchantOrderId.split('__');
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  const res = await fetch(`${supabaseUrl}/rest/v1/program_purchases`, {
-    method: 'POST',
-    headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=ignore-duplicates',
-    },
-    body: JSON.stringify({ program_id: programId, client_id: userId }),
-  });
+  if (parts[0] === 'sub') {
+    // ─── Subscription payment ─────────────────────────────────────────────
+    const [, tier, coachId] = parts;
+    if (!tier || !coachId) {
+      console.error('Cannot extract tier/coachId from sub merchant_order_id:', merchantOrderId);
+      return new Response('Invalid merchant_order_id', { status: 400 });
+    }
 
-  console.log('Purchase recorded:', programId, userId, res.status);
+    const paymentRef = String(transaction.id ?? merchantOrderId);
+
+    const res = await fetch(`${supabaseUrl}/rest/v1/coach_subscriptions`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({ coach_id: coachId, tier, payment_ref: paymentRef }),
+    });
+
+    console.log('Subscription recorded:', tier, coachId, res.status);
+  } else {
+    // ─── Program purchase ─────────────────────────────────────────────────
+    const [programId, userId] = parts;
+    if (!programId || !userId) {
+      console.error('Cannot extract programId/userId from merchant_order_id:', merchantOrderId);
+      return new Response('Invalid merchant_order_id', { status: 400 });
+    }
+
+    const res = await fetch(`${supabaseUrl}/rest/v1/program_purchases`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=ignore-duplicates',
+      },
+      body: JSON.stringify({ program_id: programId, client_id: userId }),
+    });
+
+    console.log('Purchase recorded:', programId, userId, res.status);
+  }
 
   return new Response(JSON.stringify({ received: true, recorded: true }), {
     headers: { 'Content-Type': 'application/json' },

@@ -16,8 +16,25 @@ export interface NotificationPayload {
  */
 export async function sendNotification(payload: NotificationPayload): Promise<void> {
   try {
-    await supabase.functions.invoke('send-push', { body: payload });
-  } catch {
-    // Intentionally swallowed — notifications are non-critical
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      console.error('sendNotification skipped: no active access token');
+      return;
+    }
+
+    const { error } = await supabase.functions.invoke('send-push', {
+      body: payload,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (error) {
+      console.error('send-push invoke failed:', error.message);
+    }
+  } catch (error) {
+    console.error('sendNotification failed:', error);
   }
 }

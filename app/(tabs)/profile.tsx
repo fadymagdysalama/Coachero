@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../src/stores/authStore';
+import { useMarketplaceStore } from '../../src/stores/marketplaceStore';
 import { Button } from '../../src/components';
 import { colors, fontSize, spacing, borderRadius } from '../../src/constants/theme';
 import i18n from '../../src/i18n';
@@ -11,6 +12,13 @@ import i18n from '../../src/i18n';
 export default function ProfileScreen() {
   const { t } = useTranslation();
   const { profile, signOut } = useAuthStore();
+  const { coachSubscription, fetchCoachSubscription } = useMarketplaceStore();
+
+  useEffect(() => {
+    if (profile?.role === 'coach') {
+      fetchCoachSubscription();
+    }
+  }, [fetchCoachSubscription, profile?.role]);
 
   if (!profile) return null;
 
@@ -52,10 +60,35 @@ export default function ProfileScreen() {
               {profile.role === 'coach' ? '🏋️ Coach' : '💪 Client'}
             </Text>
           </View>
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaPill}>
+              <Text style={styles.metaLabel}>Language</Text>
+              <Text style={styles.metaValue}>{profile.language.toUpperCase()}</Text>
+            </View>
+            <View style={styles.metaPill}>
+              <Text style={styles.metaLabel}>Joined</Text>
+              <Text style={styles.metaValue}>{new Date(profile.created_at).toLocaleDateString()}</Text>
+            </View>
+          </View>
         </View>
 
-        {/* Settings */}
-        <View style={styles.section}>
+        {profile.role === 'coach' && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Coach Subscription</Text>
+            <Text style={styles.sectionSubtitle}>
+              Current plan: {(coachSubscription?.tier ?? 'starter').toUpperCase()}
+            </Text>
+            <Button
+              title="Manage Subscription"
+              onPress={() => router.push('/marketplace/subscription')}
+              style={styles.settingButton}
+            />
+          </View>
+        )}
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Settings</Text>
           <Button
             title={`Language: ${i18n.language === 'en' ? 'English 🇺🇸' : 'العربية 🇸🇦'}`}
             onPress={toggleLanguage}
@@ -138,6 +171,48 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: fontSize.sm,
     fontWeight: '600',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  metaPill: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  metaLabel: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    marginBottom: spacing.xs,
+  },
+  metaValue: {
+    color: colors.text,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+  },
+  sectionSubtitle: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
   },
   section: {
     gap: spacing.md,

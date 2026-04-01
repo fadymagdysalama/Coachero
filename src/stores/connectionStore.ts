@@ -66,6 +66,30 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     // Find the client before updating so we can send the notification
     const pending = get().pendingRequests.find((r) => r.request.id === requestId);
 
+    // ─── Tier enforcement ────────────────────────────────────────────────────
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const CLIENT_LIMITS: Record<string, number> = { starter: 1, pro: 2, business: Infinity };
+
+    const { data: subData } = await supabase
+      .from('coach_subscriptions')
+      .select('tier')
+      .eq('coach_id', user.id)
+      .maybeSingle();
+
+    const tier: string = subData?.tier ?? 'starter';
+    const limit = CLIENT_LIMITS[tier] ?? 1;
+    const currentClientCount = get().clients.length;
+
+    if (currentClientCount >= limit) {
+      return {
+        error:
+          `You've reached your ${tier} plan limit of ${limit === Infinity ? 'unlimited' : limit} client${limit === 1 ? '' : 's'}. Upgrade your plan to accept more clients.`,
+      };
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const { error } = await supabase
       .from('coach_client_requests')
       .update({ status: 'accepted' })

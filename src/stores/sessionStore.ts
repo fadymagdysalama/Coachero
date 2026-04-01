@@ -203,6 +203,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       await supabase
         .from('session_clients')
         .insert(client_ids.map((clientId) => ({ session_id: session.id, client_id: clientId })));
+
+      // Notify each added client that a session was booked for them
+      for (const clientId of client_ids) {
+        sendNotification({
+          recipient_id: clientId,
+          type: 'session_booked',
+          title: 'Session Booked',
+          body: `Your coach scheduled a session on ${session.date} at ${session.start_time}.`,
+          data: { session_id: session.id },
+        });
+      }
     }
 
     return { id: session.id, error: null };

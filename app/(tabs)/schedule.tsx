@@ -228,8 +228,10 @@ export default function ScheduleScreen() {
   }
 
   async function handleBook(session: SessionWithClients) {
-    // Enforce 1 booking per day
-    const alreadyBookedToday = sessions.some((s) => s.date === session.date);
+    // Enforce 1 active booking per day. Cancelled sessions must not block rebooking.
+    const alreadyBookedToday = sessions.some(
+      (s) => s.date === session.date && s.status === 'scheduled',
+    );
     if (alreadyBookedToday) {
       Alert.alert(t('common.error'), t('schedule.oncePerDay'));
       return;

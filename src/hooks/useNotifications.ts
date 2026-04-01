@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -76,6 +76,7 @@ export function useNotifications() {
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const appStateSubscription = useRef<{ remove: () => void } | null>(null);
 
   useEffect(() => {
     if (!session?.user) {
@@ -96,6 +97,12 @@ export function useNotifications() {
 
     // 2. Fetch existing in-app notifications
     fetchNotifications();
+
+    appStateSubscription.current = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        fetchNotifications();
+      }
+    });
 
     // 3. Real-time subscription for incoming notifications
     unsubscribeRef.current = subscribeToNotifications(userId);
@@ -121,6 +128,7 @@ export function useNotifications() {
       unsubscribeRef.current?.();
       notificationListener.current?.remove();
       responseListener.current?.remove();
+      appStateSubscription.current?.remove();
     };
   }, [session?.user?.id]);
 }

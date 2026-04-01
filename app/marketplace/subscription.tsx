@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  AppState,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -76,9 +78,21 @@ export default function SubscriptionScreen() {
   const { coachSubscription, fetchCoachSubscription, upgradeSubscription } = useMarketplaceStore();
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState<SubscriptionTier | null>(null);
+  const awaitingPayment = useRef(false);
 
   useEffect(() => {
     fetchCoachSubscription().then(() => setLoading(false));
+  }, []);
+
+  // Refresh subscription when user returns from the Paymob browser payment
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && awaitingPayment.current) {
+        awaitingPayment.current = false;
+        fetchCoachSubscription();
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const currentTier: SubscriptionTier = coachSubscription?.tier ?? 'starter';
@@ -95,11 +109,26 @@ export default function SubscriptionScreen() {
           text: tier > currentTier ? t('subscription.upgrade') : t('subscription.downgrade'),
           onPress: async () => {
             setUpgrading(tier);
-            const { error } = await upgradeSubscription(tier);
+            const result = await upgradeSubscription(tier);
             setUpgrading(null);
-            if (error) {
-              Alert.alert(t('common.error'), error);
+
+            if (result.error) {
+              Alert.alert(t('common.error'), result.error);
+            } else if (result.paymentUrl) {
+              // Paid tier — open Paymob in browser
+              awaitingPayment.current = true;
+              Alert.alert(
+                t('paymentRedirect'),
+                t('paymentRedirectHint'),
+                [
+                  {
+                    text: t('common.ok'),
+                    onPress: () => Linking.openURL(result.paymentUrl!),
+                  },
+                ],
+              );
             } else {
+              // Free tier (starter) — immediate
               Alert.alert(t('subscription.upgradeSuccess'));
             }
           },

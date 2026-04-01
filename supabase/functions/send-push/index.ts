@@ -17,11 +17,8 @@ Deno.serve(async (req) => {
     return new Response('Method not allowed', { status: 405, headers: corsHeaders });
   }
 
-  // Require the caller to be authenticated (any valid Supabase JWT)
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
-    return new Response('Unauthorized', { status: 401, headers: corsHeaders });
-  }
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
   let body: {
     recipient_id: string;
@@ -48,8 +45,8 @@ Deno.serve(async (req) => {
 
   // Use service role to bypass RLS for inserts and profile reads
   const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    supabaseUrl,
+    serviceRoleKey,
   );
 
   // 1. Insert the in-app notification

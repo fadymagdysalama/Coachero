@@ -38,7 +38,7 @@ interface MarketplaceState {
 
   // Coach: subscription
   fetchCoachSubscription: () => Promise<void>;
-  upgradeSubscription: (tier: SubscriptionTier) => Promise<{ error: string | null }>;
+  upgradeSubscription: (tier: SubscriptionTier) => Promise<{ error: string | null; paymentUrl?: string }>;
 }
 
 export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
@@ -216,33 +216,49 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
   },
 
   // ─── Coach: upgrade or create subscription ────────────────────────────────
-  // Tier changes are recorded directly in coach_subscriptions.
-  // Paymob billing integration can be added here when recurring payments are set up.
+  // Starter tier is free — write directly to DB.
+  // Pro / Business tiers go through Paymob; the webhook records the subscription.
   upgradeSubscription: async (tier) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Not authenticated' };
 
-    // Upsert subscription record
-    const existing = get().coachSubscription;
-    if (existing) {
-      const { error } = await supabase
-        .from('coach_subscriptions')
-        .update({ tier })
-        .eq('coach_id', user.id);
-      if (error) return { error: error.message };
-      set((s) => ({
-        coachSubscription: s.coachSubscription ? { ...s.coachSubscription, tier } : null,
-      }));
-    } else {
-      const { data, error } = await supabase
-        .from('coach_subscriptions')
-        .insert({ coach_id: user.id, tier })
-        .select()
-        .single();
-      if (error) return { error: error.message };
-      set({ coachSubscription: data as CoachSubscription });
+    // Starter is free — upsert directly without payment
+    if (tier === 'starter') {
+      const existing = get().coachSubscription;
+      if (existing) {
+        const { error } = await supabase
+          .from('coach_subscriptions')
+          .update({ tier, payment_ref: null })
+          .eq('coach_id', user.id);
+        if (error) return { error: error.message };
+        set((s) => ({
+          coachSubscription: s.coachSubscription
+            ? { ...s.coachSubscription, tier, payment_ref: null }
+            : null,
+        }));
+      } else {
+        const { data, error } = await supabase
+          .from('coach_subscriptions')
+          .insert({ coach_id: user.id, tier })
+          .select()
+          .single();
+        if (error) return { error: error.message };
+        set({ coachSubscription: data as CoachSubscription });
+      }
+      return { error: null };
     }
 
-    return { error: null };
+    // Pro / Business — initiate Paymob payment
+    const { data: orderData, error: fnError } = await supabase.functions.invoke(
+      'paymob-subscription',
+      { body: { tier } },
+    );
+
+    if (fnError) return { error: fnError.message };
+    if (orderData?.error) return { error: orderData.error };
+
+    // Return paymentUrl — the screen opens it in the browser.
+    // Subscription is recorded by paymob-webhook after successful payment.
+    return { error: null, paymentUrl: orderData.paymentUrl as string };
   },
 }));
