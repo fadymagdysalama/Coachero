@@ -59,6 +59,9 @@ export default {
     noSessions: 'No upcoming sessions',
     activeClients: 'Active Clients',
     activePrograms: 'Active Programs',
+    daysDone: 'Days Done',
+    openProgram: 'Open Program',
+    daysProgress: 'Day {{current}} / {{total}}',
   },
   connections: {
     title: 'Clients',
@@ -146,6 +149,11 @@ export default {
     moveUp: 'Move Up',
     moveDown: 'Move Down',
     dragHint: 'Hold & drag to reorder',
+    leaveFeedback: 'Leave Feedback',
+    feedbackPlaceholder: 'How did this workout feel?',
+    yourFeedback: 'Your Feedback',
+    feedbackSaved: 'Feedback saved!',
+    editFeedback: 'Edit',
   },
   marketplace: {
     title: 'Marketplace',
@@ -311,5 +319,10 @@ export default {
     weightRequired: 'Weight is required',
     exerciseRequired: 'Exercise name is required',
     atLeastOne: 'Enter at least one measurement value',
+    programs: 'Programs',
+    noProgramsAssigned: 'No programs assigned yet',
+    completedOf: '{{done}} / {{total}} days',
+    feedbackLabel: 'Feedback',
+    noFeedback: 'No feedback yet',
   },
 };

@@ -392,19 +392,24 @@ export default function ProgressScreen() {
         <Text style={styles.title}>{t('tabs.progress')}</Text>
       </View>
 
-      <View style={styles.segmented}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabBarContent}
+      >
         {sections.map((s) => (
           <TouchableOpacity
             key={s.key}
-            style={[styles.segment, section === s.key && styles.segmentActive]}
+            style={[styles.tabPill, section === s.key && styles.tabPillActive]}
             onPress={() => setSection(s.key)}
+            activeOpacity={0.75}
           >
-            <Text style={[styles.segmentText, section === s.key && styles.segmentTextActive]}>
+            <Text style={[styles.tabPillText, section === s.key && styles.tabPillTextActive]}>
               {s.label}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -425,7 +430,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing['2xl'],
     paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingBottom: 0,
   },
   title: { fontSize: fontSize['2xl'], fontWeight: '700', color: colors.text },
 
@@ -444,7 +449,41 @@ const styles = StyleSheet.create({
   segmentText: { fontSize: fontSize.sm, fontWeight: '500', color: colors.textMuted },
   segmentTextActive: { color: colors.textInverse, fontWeight: '600' },
 
-  content: { paddingHorizontal: spacing['2xl'], paddingBottom: 80 },
+  // Scrollable pill tabs
+  tabBar: {
+    backgroundColor: 'transparent',
+  },
+  tabBarContent: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  tabPill: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tabPillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  tabPillText: {
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+    color: colors.textMuted,
+  },
+  tabPillTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+
+  content: { paddingHorizontal: spacing['2xl'], paddingBottom: 80, paddingTop: spacing.sm },
 
   addButton: {
     backgroundColor: colors.primary,

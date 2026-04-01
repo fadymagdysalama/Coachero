@@ -39,6 +39,8 @@ interface SessionState {
   createSession: (data: CreateSessionData) => Promise<{ id: string | null; error: string | null }>;
   updateSession: (id: string, data: UpdateSessionData) => Promise<{ error: string | null }>;
   cancelSession: (id: string) => Promise<{ error: string | null }>;
+  /** Coach permanently deletes a cancelled session */
+  deleteSession: (id: string) => Promise<{ error: string | null }>;
   cancelAsClient: (sessionId: string) => Promise<{ error: string | null }>;
   /** Client books themselves into an available session */
   bookSession: (sessionId: string) => Promise<{ error: string | null }>;
@@ -387,6 +389,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           : s.currentSession,
     }));
 
+    return { error: null };
+  },
+
+  deleteSession: async (id) => {
+    const { error } = await supabase.from('sessions').delete().eq('id', id);
+    if (error) return { error: error.message };
+    set((s) => ({
+      sessions: s.sessions.filter((sess) => sess.id !== id),
+      currentSession: s.currentSession?.id === id ? null : s.currentSession,
+    }));
     return { error: null };
   },
 

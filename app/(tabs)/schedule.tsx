@@ -55,12 +55,16 @@ function SessionCard({
   onPress,
   onCancel,
   canceling,
+  onDelete,
+  deleting,
 }: {
   session: SessionWithClients;
   isCoach: boolean;
   onPress: () => void;
   onCancel?: () => void;
   canceling?: boolean;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const { t } = useTranslation();
   const sColor = statusColor(session.status);
@@ -75,6 +79,7 @@ function SessionCard({
   const showStatusBadge = isCoach || session.status !== 'scheduled';
 
   const showCancelBtn = !isCoach && onCancel && session.status === 'scheduled';
+  const showDeleteBtn = isCoach && onDelete && session.status === 'cancelled';
 
   return (
     <View style={styles.sessionCard}>
@@ -97,6 +102,20 @@ function SessionCard({
                   {t(`schedule.${session.status}` as any)}
                 </Text>
               </View>
+            )}
+            {showDeleteBtn && (
+              <TouchableOpacity
+                style={[styles.inlineDeleteBtn, deleting && styles.bookBtnDisabled]}
+                onPress={onDelete}
+                disabled={deleting}
+                activeOpacity={0.8}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={colors.textInverse} />
+                ) : (
+                  <Text style={styles.inlineDeleteText}>{t('common.delete')}</Text>
+                )}
+              </TouchableOpacity>
             )}
           </View>
           <Text style={styles.cardMeta}>{t('schedule.min', { count: session.duration_minutes })}</Text>
@@ -171,7 +190,7 @@ export default function ScheduleScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { profile } = useAuthStore();
-  const { sessions, availableSessions, isLoading, fetchSessions, fetchAvailableCoachSessions, bookSession, cancelAsClient } = useSessionStore();
+  const { sessions, availableSessions, isLoading, fetchSessions, fetchAvailableCoachSessions, bookSession, cancelAsClient, deleteSession } = useSessionStore();
   const { myCoach, fetchClientData } = useConnectionStore();
 
   const isCoach = profile?.role === 'coach';
@@ -183,6 +202,7 @@ export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(
     (year: number, month: number) => {
@@ -247,6 +267,26 @@ export default function ScheduleScreen() {
       const msg = error === 'already_booked' ? t('schedule.alreadyBooked') : error;
       Alert.alert(t('common.error'), msg);
     }
+  }
+
+  async function handleDelete(session: SessionWithClients) {
+    Alert.alert(
+      t('schedule.cancelled'),
+      t('schedule.confirmDeleteSession', { defaultValue: 'Permanently delete this cancelled session?' }),
+      [
+        { text: t('common.back'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(session.id);
+            const { error } = await deleteSession(session.id);
+            setDeletingId(null);
+            if (error) Alert.alert(t('common.error'), error);
+          },
+        },
+      ],
+    );
   }
 
   async function handleCancel(session: SessionWithClients) {
@@ -358,6 +398,8 @@ export default function ScheduleScreen() {
                     }
                     onCancel={!isCoach ? () => handleCancel(session) : undefined}
                     canceling={cancelingId === session.id}
+                    onDelete={isCoach ? () => handleDelete(session) : undefined}
+                    deleting={deletingId === session.id}
                   />
                 ))
               )}
@@ -516,6 +558,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: fontSize.xs,
     fontWeight: '600',
+  },
+  inlineDeleteBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.error,
+  },
+  inlineDeleteText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: '#fff',
   },
   cardMeta: {
     fontSize: fontSize.xs,

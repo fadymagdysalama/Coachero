@@ -7,13 +7,28 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
+  Modal,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useProgressStore } from '../../src/stores/progressStore';
+import { supabase } from '../../src/lib/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
 
-type Section = 'measurements' | 'strength' | 'photos';
+type Section = 'measurements' | 'strength' | 'photos' | 'programs';
+
+interface ProgramProgressItem {
+  programId: string;
+  programTitle: string;
+  totalDays: number;
+  currentDay: number;
+  days: Array<{ id: string; day_number: number }>;
+  completedDayIds: string[];
+  feedbacks: Array<{ day_id: string; text: string | null }>;
+}
 
 function SparkChart({ data, color = colors.primary }: { data: number[]; color?: string }) {
   if (data.length < 2) return null;
@@ -55,16 +70,60 @@ export default function ClientProgressScreen() {
   const { measurements, strengthLogs, photos, fetchMeasurements, fetchStrengthLogs, fetchPhotos, isLoading } =
     useProgressStore();
 
-  const [section, setSection] = useState<Section>('measurements');
+  const [section, setSection] = useState<Section>('programs');
+  const [fullscreenPhoto, setFullscreenPhoto] = useState<{ url: string; label: string; date: string } | null>(null);
+  const [programsProgress, setProgramsProgress] = useState<ProgramProgressItem[]>([]);
+  const [programsLoading, setProgramsLoading] = useState(false);
+
+  const loadProgramsProgress = async () => {
+    if (!clientId) return;
+    setProgramsLoading(true);
+    const { data: assignments } = await supabase
+      .from('program_assignments')
+      .select('id, program_id, current_day, program:programs(id, title, duration_days)')
+      .eq('client_id', clientId)
+      .order('started_at', { ascending: false });
+
+    if (!assignments || assignments.length === 0) {
+      setProgramsProgress([]);
+      setProgramsLoading(false);
+      return;
+    }
+
+    const results = await Promise.all(
+      (assignments as any[])
+        .filter((a) => a.program != null)
+        .map(async (a) => {
+          const [daysRes, logsRes, feedbackRes] = await Promise.all([
+            supabase.from('program_days').select('id, day_number').eq('program_id', a.program_id).order('day_number', { ascending: true }),
+            supabase.from('workout_logs').select('day_id').eq('client_id', clientId).eq('program_id', a.program_id),
+            supabase.from('client_feedback').select('day_id, text').eq('client_id', clientId).eq('program_id', a.program_id),
+          ]);
+          return {
+            programId: a.program_id as string,
+            programTitle: a.program.title as string,
+            totalDays: a.program.duration_days as number,
+            currentDay: a.current_day as number,
+            days: (daysRes.data ?? []) as Array<{ id: string; day_number: number }>,
+            completedDayIds: (logsRes.data ?? []).map((l: any) => l.day_id as string),
+            feedbacks: (feedbackRes.data ?? []) as Array<{ day_id: string; text: string | null }>,
+          };
+        })
+    );
+    setProgramsProgress(results);
+    setProgramsLoading(false);
+  };
 
   useEffect(() => {
     if (!clientId) return;
     fetchMeasurements(clientId);
     fetchStrengthLogs(clientId);
     fetchPhotos(clientId);
+    loadProgramsProgress();
   }, [clientId]);
 
   const sections: { key: Section; label: string }[] = [
+    { key: 'programs', label: t('progress.programs') },
     { key: 'measurements', label: t('progress.measurements') },
     { key: 'strength', label: t('progress.strength') },
     { key: 'photos', label: t('progress.photos') },
@@ -93,8 +152,44 @@ export default function ClientProgressScreen() {
     .map((ex) => strengthLogs.find((l) => l.exercise_name === ex && l.is_pr))
     .filter(Boolean);
 
+  const handleTabChange = (tab: Section) => {
+    setSection(tab);
+    if (tab === 'programs') {
+      loadProgramsProgress();
+    }
+  };
+
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      {/* Fullscreen photo viewer */}
+      <Modal
+        visible={fullscreenPhoto !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFullscreenPhoto(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <StatusBar hidden />
+          <TouchableOpacity style={styles.modalClose} onPress={() => setFullscreenPhoto(null)}>
+            <Text style={styles.modalCloseText}>✕</Text>
+          </TouchableOpacity>
+          {fullscreenPhoto && (
+            <>
+              <Image
+                source={{ uri: fullscreenPhoto.url }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+              <View style={styles.modalMeta}>
+                <Text style={styles.modalLabel}>{t(labelKey(fullscreenPhoto.label))}</Text>
+                <Text style={styles.modalDate}>{fullscreenPhoto.date}</Text>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -104,22 +199,28 @@ export default function ClientProgressScreen() {
         {clientName ? <Text style={styles.clientName}>{clientName}</Text> : null}
       </View>
 
-      {/* Segment */}
-      <View style={styles.segmented}>
+      {/* Scrollable pill tab bar */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.pillScroll}
+        contentContainerStyle={styles.tabBarContent}
+      >
         {sections.map((s) => (
           <TouchableOpacity
             key={s.key}
-            style={[styles.segment, section === s.key && styles.segmentActive]}
-            onPress={() => setSection(s.key)}
+            style={[styles.tabPill, section === s.key && styles.tabPillActive]}
+            onPress={() => handleTabChange(s.key)}
+            activeOpacity={0.75}
           >
-            <Text style={[styles.segmentText, section === s.key && styles.segmentTextActive]}>
+            <Text style={[styles.tabPillText, section === s.key && styles.tabPillTextActive]}>
               {s.label}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} style={styles.contentScroll}>
         {/* ─── Measurements ─────────────────────────────────────────────── */}
         {section === 'measurements' && (
           <View>
@@ -285,7 +386,12 @@ export default function ClientProgressScreen() {
             ) : (
               <View style={styles.photoGrid}>
                 {photos.map((p) => (
-                  <View key={p.id} style={styles.photoCard}>
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.photoCard}
+                    onPress={() => setFullscreenPhoto({ url: p.photo_url, label: p.label, date: p.date })}
+                    activeOpacity={0.85}
+                  >
                     <Image
                       source={{ uri: p.photo_url }}
                       style={styles.photoImage}
@@ -295,49 +401,128 @@ export default function ClientProgressScreen() {
                       <Text style={styles.photoLabel}>{t(labelKey(p.label))}</Text>
                       <Text style={styles.photoDate}>{p.date}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
           </View>
         )}
+
+        {/* ─── Programs ─────────────────────────────────────────────────── */}
+        {section === 'programs' && (
+          <View>
+            {programsLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
+            ) : programsProgress.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyIcon}>📋</Text>
+                <Text style={styles.emptyText}>{t('progress.noProgramsAssigned')}</Text>
+              </View>
+            ) : (
+              programsProgress.map((prog) => {
+                const donePct = Math.min(
+                  (prog.completedDayIds.length / Math.max(prog.totalDays, 1)) * 100,
+                  100,
+                );
+                return (
+                  <View key={prog.programId} style={styles.progCard}>
+                    <View style={styles.progCardHeader}>
+                      <Text style={styles.progCardTitle} numberOfLines={1}>
+                        {prog.programTitle}
+                      </Text>
+                      <Text style={styles.progCardMeta}>
+                        {t('progress.completedOf', { done: prog.completedDayIds.length, total: prog.totalDays })}
+                      </Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressFill, { width: `${Math.round(donePct)}%` as any }]} />
+                    </View>
+                    <View style={styles.daysList}>
+                      {prog.days.map((day) => {
+                        const done = prog.completedDayIds.includes(day.id);
+                        const feedback = prog.feedbacks.find((f) => f.day_id === day.id);
+                        return (
+                          <View key={day.id} style={styles.dayRow}>
+                            <View style={[styles.dayDot, done && styles.dayDotDone]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.dayRowText, done && styles.dayRowTextDone]}>
+                                Day {day.day_number}{done ? '  ✓' : ''}
+                              </Text>
+                              {feedback?.text ? (
+                                <Text style={styles.dayFeedback} numberOfLines={2}>
+                                  "{feedback.text}"
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.card },
   header: {
-    paddingTop: 60,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
     paddingHorizontal: spacing['2xl'],
     backgroundColor: colors.card,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: spacing.xs,
   },
-  backButton: { marginBottom: spacing.sm },
+  backButton: { marginBottom: 0 },
   backText: { fontSize: fontSize.md, color: colors.primary, fontWeight: '600' },
   headerTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text },
   clientName: { fontSize: fontSize.sm, color: colors.textMuted },
 
-  segmented: {
+  // Scrollable pill tabs
+  pillScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  tabBar: {
+    backgroundColor: 'transparent',
+  },
+  tabBarContent: {
     flexDirection: 'row',
-    margin: spacing['2xl'],
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  tabPill: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
   },
-  segment: { flex: 1, paddingVertical: spacing.sm + 2, alignItems: 'center' },
-  segmentActive: { backgroundColor: colors.primary },
-  segmentText: { fontSize: fontSize.sm, fontWeight: '500', color: colors.textMuted },
-  segmentTextActive: { color: colors.textInverse, fontWeight: '600' },
+  tabPillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  tabPillText: {
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+    color: colors.textMuted,
+  },
+  tabPillTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
 
-  content: { paddingHorizontal: spacing['2xl'], paddingBottom: 60 },
+  contentScroll: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: spacing['2xl'], paddingBottom: 60, paddingTop: spacing.sm },
 
   emptyState: { alignItems: 'center', paddingVertical: spacing['4xl'] },
   emptyIcon: { fontSize: 40, marginBottom: spacing.md },
@@ -449,4 +634,112 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   photoDate: { fontSize: fontSize.xs, color: colors.textMuted },
+
+  // Fullscreen photo modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalClose: {
+    position: 'absolute',
+    top: 60,
+    right: spacing['2xl'],
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  modalCloseText: { fontSize: 18, color: '#fff', fontWeight: '700' },
+  fullscreenImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.72,
+  },
+  modalMeta: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  modalLabel: { fontSize: fontSize.md, color: '#fff', fontWeight: '600' },
+  modalDate: { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+
+  // Programs tab
+  progCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  progCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progCardTitle: {
+    flex: 1,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+    marginRight: spacing.sm,
+  },
+  progCardMeta: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: colors.surface,
+    borderRadius: 3,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
+  daysList: { gap: spacing.sm, marginTop: spacing.xs },
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  dayDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.border,
+    marginTop: 3,
+    flexShrink: 0,
+  },
+  dayDotDone: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  dayRowText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  dayRowTextDone: {
+    color: colors.text,
+    fontWeight: '600',
+  },
+  dayFeedback: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
 });

@@ -8,6 +8,7 @@ import type {
   ProgramAssignment,
   ProgramWithDays,
   ProgramDayWithExercises,
+  ClientFeedback,
 } from '../types';
 
 interface ProgramState {
@@ -53,6 +54,10 @@ interface ProgramState {
   fetchAssignedPrograms: () => Promise<void>;
   fetchCompletedDays: (programId: string) => Promise<void>;
   logWorkout: (programId: string, dayId: string) => Promise<{ error: string | null }>;
+
+  // Client: feedback
+  submitFeedback: (programId: string, dayId: string, text: string, videoUrl?: string) => Promise<{ error: string | null }>;
+  fetchProgramFeedback: (programId: string) => Promise<{ feedbacks: ClientFeedback[]; error: string | null }>;
 }
 
 export const useProgramStore = create<ProgramState>((set, get) => ({
@@ -410,5 +415,46 @@ export const useProgramStore = create<ProgramState>((set, get) => ({
     }
 
     return { error: null };
+  },
+
+  // ─── Client: submit or update feedback for a day ──────────────────────────────────────────
+  submitFeedback: async (programId, dayId, text, videoUrl) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const { data: existing } = await supabase
+      .from('client_feedback')
+      .select('id')
+      .eq('client_id', user.id)
+      .eq('program_id', programId)
+      .eq('day_id', dayId)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from('client_feedback')
+        .update({ text, video_url: videoUrl ?? null })
+        .eq('id', existing.id);
+      return { error: error?.message ?? null };
+    }
+
+    const { error } = await supabase
+      .from('client_feedback')
+      .insert({ client_id: user.id, program_id: programId, day_id: dayId, text, video_url: videoUrl ?? null });
+    return { error: error?.message ?? null };
+  },
+
+  // ─── Client: fetch all feedback for a program ──────────────────────────────────────────────
+  fetchProgramFeedback: async (programId) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { feedbacks: [], error: 'Not authenticated' };
+
+    const { data, error } = await supabase
+      .from('client_feedback')
+      .select('*')
+      .eq('client_id', user.id)
+      .eq('program_id', programId);
+
+    return { feedbacks: (data ?? []) as ClientFeedback[], error: error?.message ?? null };
   },
 }));

@@ -59,6 +59,9 @@ export default {
     noSessions: 'لا توجد جلسات قادمة',
     activeClients: 'العملاء النشطون',
     activePrograms: 'البرامج النشطة',
+    daysDone: 'أيام منجزة',
+    openProgram: 'فتح البرنامج',
+    daysProgress: 'اليوم {{current}} / {{total}}',
   },
   connections: {
     title: 'العملاء',
@@ -146,6 +149,11 @@ export default {
     moveUp: 'تحريك للأعلى',
     moveDown: 'تحريك للأسفل',
     dragHint: 'اسحب لإعادة الترتيب',
+    leaveFeedback: 'اترك ملاحظة',
+    feedbackPlaceholder: 'كيف كانت هذه التمرينة؟',
+    yourFeedback: 'ملاحظتك',
+    feedbackSaved: 'تم حفظ الملاحظة!',
+    editFeedback: 'تعديل',
   },
   marketplace: {
     title: 'السوق',
@@ -311,5 +319,10 @@ export default {
     weightRequired: 'الوزن مطلوب',
     exerciseRequired: 'اسم التمرين مطلوب',
     atLeastOne: 'أدخل قيمة قياس واحدة على الأقل',
+    programs: 'البرامج',
+    noProgramsAssigned: 'لا توجد برامج مخصصة بعد',
+    completedOf: '{{done}} / {{total}} أيام',
+    feedbackLabel: 'ملاحظة',
+    noFeedback: 'لا توجد ملاحظة بعد',
   },
 };

@@ -153,7 +153,7 @@ function CoachView() {
         ) : (
           clients.map(({ profile: p, request }) => (
             <TouchableOpacity key={request.id} style={styles.clientCard}
-              onPress={() => router.push({ pathname: '/coach/client-detail', params: { clientId: p.id, requestId: request.id } })}
+              onPress={() => router.push({ pathname: '/coach/client-progress', params: { clientId: p.id, clientName: p.display_name } })}
               activeOpacity={0.8}>
               <Avatar name={p.display_name} />
               <View style={styles.cardInfo}>

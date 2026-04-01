@@ -81,7 +81,19 @@ export default function HomeScreen() {
   const { unreadCount } = useNotificationStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSessionItem[]>([]);
-  const [todayWorkout, setTodayWorkout] = useState<string | null>(null);
+  const [todayWorkout, setTodayWorkout] = useState<{
+    programTitle: string;
+    currentDay: number;
+    totalDays: number;
+    programId: string;
+    exercises: Array<{ exercise_name: string; sets: number; reps: string }>;
+  } | null>(null);
+  const [activePrograms, setActivePrograms] = useState<Array<{
+    id: string;
+    program_id: string;
+    current_day: number;
+    program: { title: string; duration_days: number };
+  }>>([]);
 
   if (!profile) return null;
 
@@ -132,8 +144,9 @@ export default function HomeScreen() {
       const [assignmentsRes, workoutsRes, sessionIdsRes] = await Promise.all([
         supabase
           .from('program_assignments')
-          .select('id, current_day, program:programs(title)', { count: 'exact' })
-          .eq('client_id', profile.id),
+          .select('id, program_id, current_day, program:programs(id, title, duration_days)', { count: 'exact' })
+          .eq('client_id', profile.id)
+          .order('started_at', { ascending: false }),
         supabase
           .from('workout_logs')
           .select('id', { count: 'exact', head: true })
@@ -159,21 +172,57 @@ export default function HomeScreen() {
 
       if (!isMounted) return;
 
-      const assignments = assignmentsRes.data ?? [];
-      const firstAssignment = assignments[0] as any;
+      const rawAssignments = (assignmentsRes.data ?? []) as unknown as Array<{
+        id: string;
+        program_id: string;
+        current_day: number;
+        program: { title: string; duration_days: number } | null;
+      }>;
+      const validAssignments = rawAssignments.filter((a) => a.program != null);
+      const firstAssignment = validAssignments[0];
 
       setStats({
         primaryCount: assignmentsRes.count ?? 0,
         secondaryCount: workoutsRes.count ?? 0,
         primaryLabel: t('home.activePrograms'),
-        secondaryLabel: 'Workouts',
+        secondaryLabel: t('home.daysDone'),
       });
+      setActivePrograms(validAssignments.map((a) => ({ ...a, program: a.program! })));
       setUpcomingSessions((sessionsRes.data as UpcomingSessionItem[] | null) ?? []);
-      setTodayWorkout(
-        firstAssignment?.program?.title
-          ? `${firstAssignment.program.title} • Day ${firstAssignment.current_day}`
-          : null,
-      );
+
+      // Fetch today's workout exercises for the first active program
+      if (firstAssignment?.program) {
+        const { data: dayData } = await supabase
+          .from('program_days')
+          .select('id')
+          .eq('program_id', firstAssignment.program_id)
+          .eq('day_number', firstAssignment.current_day)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        if (dayData) {
+          const { data: exercises } = await supabase
+            .from('program_exercises')
+            .select('exercise_name, sets, reps')
+            .eq('day_id', dayData.id)
+            .order('order_index', { ascending: true })
+            .limit(3);
+
+          if (!isMounted) return;
+          setTodayWorkout({
+            programTitle: firstAssignment.program!.title,
+            currentDay: firstAssignment.current_day,
+            totalDays: firstAssignment.program!.duration_days,
+            programId: firstAssignment.program_id,
+            exercises: (exercises ?? []) as Array<{ exercise_name: string; sets: number; reps: string }>,
+          });
+        } else {
+          setTodayWorkout(null);
+        }
+      } else {
+        setTodayWorkout(null);
+      }
     };
 
       loadDashboard();
@@ -259,23 +308,88 @@ export default function HomeScreen() {
         </View>
 
         {!isCoach && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Today's Workout</Text>
-            {todayWorkout ? (
-              <View style={styles.workoutCard}>
-                <Text style={styles.workoutTitle}>{todayWorkout}</Text>
-                <Text style={styles.emptySubtext}>Open Programs to continue your assigned plan.</Text>
-              </View>
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyIcon}>💪</Text>
-                <Text style={styles.emptyText}>No workout scheduled</Text>
-                <Text style={styles.emptySubtext}>
-                  Browse programs or connect with a coach
-                </Text>
+          <>
+            {activePrograms.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t('home.activePrograms')}</Text>
+                {activePrograms.map((prog) => {
+                  const pct = Math.min(
+                    ((prog.current_day - 1) / Math.max(prog.program.duration_days, 1)) * 100,
+                    100,
+                  );
+                  return (
+                    <TouchableOpacity
+                      key={prog.id}
+                      style={styles.programCard}
+                      onPress={() =>
+                        router.push({ pathname: '/programs/detail', params: { id: prog.program_id } })
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.programCardHeader}>
+                        <Text style={styles.programCardTitle} numberOfLines={1}>
+                          {prog.program.title}
+                        </Text>
+                        <Text style={styles.programCardDay}>
+                          Day {prog.current_day}/{prog.program.duration_days}
+                        </Text>
+                      </View>
+                      <View style={styles.progressTrack}>
+                        <View style={[styles.progressFill, { width: `${Math.round(pct)}%` as any }]} />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
-          </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Today's Workout</Text>
+              {todayWorkout ? (
+                <TouchableOpacity
+                  style={styles.workoutCard}
+                  onPress={() =>
+                    router.push({ pathname: '/programs/detail', params: { id: todayWorkout.programId } })
+                  }
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.workoutCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.workoutTitle}>{todayWorkout.programTitle}</Text>
+                      <Text style={styles.workoutDayMeta}>
+                        Day {todayWorkout.currentDay} of {todayWorkout.totalDays}
+                      </Text>
+                    </View>
+                    <Text style={styles.workoutArrow}>›</Text>
+                  </View>
+                  {todayWorkout.exercises.length > 0 ? (
+                    <View style={styles.workoutExerciseList}>
+                      {todayWorkout.exercises.map((ex, i) => (
+                        <View key={i} style={styles.workoutExerciseRow}>
+                          <Text style={styles.workoutExerciseDot}>·</Text>
+                          <Text style={styles.workoutExerciseName}>{ex.exercise_name}</Text>
+                          <Text style={styles.workoutExerciseMeta}>{ex.sets}×{ex.reps}</Text>
+                        </View>
+                      ))}
+                      {todayWorkout.exercises.length === 3 && (
+                        <Text style={styles.workoutMoreText}>+ more exercises</Text>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={styles.emptySubtext}>No exercises added for this day yet.</Text>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyIcon}>💪</Text>
+                  <Text style={styles.emptyText}>No workout scheduled</Text>
+                  <Text style={styles.emptySubtext}>
+                    Browse programs or connect with a coach
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -457,10 +571,93 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  workoutCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
   workoutTitle: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.text,
+  },
+  workoutDayMeta: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  workoutArrow: {
+    fontSize: 26,
+    color: colors.textMuted,
+    marginLeft: spacing.sm,
+  },
+  workoutExerciseList: {
+    gap: spacing.xs,
+  },
+  workoutExerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  workoutExerciseDot: {
+    width: 14,
+    fontSize: fontSize.lg,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  workoutExerciseName: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.text,
+  },
+  workoutExerciseMeta: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  workoutMoreText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
+  },
+  programCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  programCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  programCardTitle: {
+    flex: 1,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+    marginRight: spacing.sm,
+  },
+  programCardDay: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: colors.borderLight,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
   },
   emptyIcon: {
     fontSize: 36,

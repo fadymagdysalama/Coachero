@@ -146,6 +146,16 @@ export interface StrengthLog {
   created_at: string;
 }
 
+export interface ClientFeedback {
+  id: string;
+  client_id: string;
+  program_id: string;
+  day_id: string;
+  text: string | null;
+  video_url: string | null;
+  created_at: string;
+}
+
 // ─── Phase 6: Marketplace ──────────────────────────────────────────────────
 
 export interface ProgramPurchase {

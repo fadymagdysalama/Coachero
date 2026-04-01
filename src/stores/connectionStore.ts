@@ -245,7 +245,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
     const { error } = await supabase
       .from('coach_client_requests')
-      .update({ status: 'rejected' })
+      .delete()
       .eq('id', myRequest.id);
 
     if (error) return { error: error.message };
@@ -259,7 +259,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
     const { error } = await supabase
       .from('coach_client_requests')
-      .update({ status: 'rejected' })
+      .delete()
       .eq('id', myRequest.id);
 
     if (error) return { error: error.message };

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -25,17 +26,28 @@ export default function ProgramDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentProgram, isLoading, fetchProgramWithDays, completedDayIds, fetchCompletedDays, logWorkout } = useProgramStore();
+  const { currentProgram, isLoading, fetchProgramWithDays, completedDayIds, fetchCompletedDays, logWorkout, submitFeedback, fetchProgramFeedback } = useProgramStore();
   const { profile } = useAuthStore();
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [markingDay, setMarkingDay] = useState<string | null>(null);
+  const [feedbacks, setFeedbacks] = useState<Record<string, { id: string; text: string | null }>>({});
+  const [feedbackEditing, setFeedbackEditing] = useState<string | null>(null);
+  const [feedbackDraft, setFeedbackDraft] = useState('');
+  const [savingFeedback, setSavingFeedback] = useState(false);
 
   const isCoach = profile?.role === 'coach';
 
   useEffect(() => {
     if (id) {
       fetchProgramWithDays(id);
-      if (!isCoach) fetchCompletedDays(id);
+      if (!isCoach) {
+        fetchCompletedDays(id);
+        fetchProgramFeedback(id).then(({ feedbacks: data }) => {
+          const map: Record<string, { id: string; text: string | null }> = {};
+          for (const f of data) { map[f.day_id] = { id: f.id, text: f.text }; }
+          setFeedbacks(map);
+        });
+      }
     }
   }, [id]);
 
@@ -61,6 +73,24 @@ export default function ProgramDetailScreen() {
     const { error } = await logWorkout(currentProgram.id, dayId);
     setMarkingDay(null);
     if (error) Alert.alert(t('common.error'), error);
+  };
+
+  const handleEditFeedback = (dayId: string) => {
+    setFeedbackEditing(dayId);
+    setFeedbackDraft(feedbacks[dayId]?.text ?? '');
+  };
+
+  const handleSaveFeedback = async (dayId: string) => {
+    if (!currentProgram) return;
+    setSavingFeedback(true);
+    const { error } = await submitFeedback(currentProgram.id, dayId, feedbackDraft.trim());
+    setSavingFeedback(false);
+    if (error) {
+      Alert.alert(t('common.error'), error);
+    } else {
+      setFeedbacks((prev) => ({ ...prev, [dayId]: { ...prev[dayId], text: feedbackDraft.trim() } }));
+      setFeedbackEditing(null);
+    }
   };
 
   return (
@@ -198,6 +228,59 @@ export default function ProgramDetailScreen() {
                     )}
                   </TouchableOpacity>
                 )}
+
+                {/* Client feedback per day */}
+                {!isCoach && (
+                  <View style={styles.feedbackSection}>
+                    <Text style={styles.feedbackSectionTitle}>{t('programs.yourFeedback')}</Text>
+                    {feedbackEditing === day.id ? (
+                      <View>
+                        <TextInput
+                          style={styles.feedbackInput}
+                          value={feedbackDraft}
+                          onChangeText={setFeedbackDraft}
+                          placeholder={t('programs.feedbackPlaceholder')}
+                          placeholderTextColor={colors.textMuted}
+                          multiline
+                          numberOfLines={3}
+                        />
+                        <View style={styles.feedbackActions}>
+                          <TouchableOpacity
+                            style={styles.feedbackCancelBtn}
+                            onPress={() => setFeedbackEditing(null)}
+                          >
+                            <Text style={styles.feedbackCancelText}>{t('common.cancel')}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.feedbackSaveBtn, savingFeedback && styles.feedbackSaveBtnDisabled]}
+                            onPress={() => handleSaveFeedback(day.id)}
+                            disabled={savingFeedback}
+                          >
+                            {savingFeedback ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <Text style={styles.feedbackSaveText}>{t('common.save')}</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : feedbacks[day.id]?.text ? (
+                      <View style={styles.feedbackCard}>
+                        <Text style={styles.feedbackText}>"{feedbacks[day.id].text}"</Text>
+                        <TouchableOpacity onPress={() => handleEditFeedback(day.id)}>
+                          <Text style={styles.feedbackEditText}>{t('programs.editFeedback')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.feedbackAddBtn}
+                        onPress={() => handleEditFeedback(day.id)}
+                      >
+                        <Text style={styles.feedbackAddText}>+ {t('programs.leaveFeedback')}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -318,4 +401,70 @@ const styles = StyleSheet.create({
     borderColor: `${colors.error}30`,
   },
   videoLinkText: { fontSize: fontSize.xs, fontWeight: '700', color: '#CC0000' },
+
+  // Client feedback
+  feedbackSection: {
+    marginTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  feedbackSectionTitle: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  feedbackCard: {
+    backgroundColor: `${colors.primary}08`,
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: `${colors.primary}20`,
+    gap: spacing.xs,
+  },
+  feedbackText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  feedbackEditText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
+  feedbackAddBtn: { paddingVertical: spacing.xs },
+  feedbackAddText: { fontSize: fontSize.sm, color: colors.primary, fontWeight: '500' },
+  feedbackInput: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  feedbackActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    justifyContent: 'flex-end',
+  },
+  feedbackCancelBtn: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  feedbackCancelText: { fontSize: fontSize.sm, color: colors.textSecondary },
+  feedbackSaveBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+  },
+  feedbackSaveBtnDisabled: { opacity: 0.6 },
+  feedbackSaveText: { fontSize: fontSize.sm, color: '#fff', fontWeight: '600' },
 });

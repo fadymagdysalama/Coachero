@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -82,7 +83,7 @@ function NotificationRow({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function NotificationsScreen() {
-  const { notifications, unreadCount, isLoading, fetchNotifications, markAsRead, markAllAsRead } =
+  const { notifications, unreadCount, isLoading, fetchNotifications, markAsRead, markAllAsRead, clearAll } =
     useNotificationStore();
 
   useEffect(() => { fetchNotifications(); }, []);
@@ -98,6 +99,13 @@ export default function NotificationsScreen() {
     markAllAsRead();
   }, [markAllAsRead]);
 
+  const handleClearAll = useCallback(() => {
+    Alert.alert('Clear all notifications', 'This will permanently delete all notifications.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear all', style: 'destructive', onPress: () => clearAll() },
+    ]);
+  }, [clearAll]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -106,12 +114,18 @@ export default function NotificationsScreen() {
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Notifications</Text>
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={handleMarkAll} style={styles.markAllButton}>
-            <Text style={styles.markAllText}>Mark all read</Text>
-          </TouchableOpacity>
-        )}
-        {unreadCount === 0 && <View style={styles.markAllButton} />}
+        <View style={styles.headerActions}>
+          {unreadCount > 0 && (
+            <TouchableOpacity onPress={handleMarkAll}>
+              <Text style={styles.markAllText}>Mark all read</Text>
+            </TouchableOpacity>
+          )}
+          {notifications.length > 0 && (
+            <TouchableOpacity onPress={handleClearAll}>
+              <Text style={styles.clearAllText}>Clear all</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {isLoading && notifications.length === 0 ? (
@@ -173,13 +187,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  markAllButton: {
-    minWidth: 80,
-    alignItems: 'flex-end',
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    alignItems: 'center',
   },
   markAllText: {
     fontSize: fontSize.sm,
     color: colors.primary,
+    fontWeight: '600',
+  },
+  clearAllText: {
+    fontSize: fontSize.sm,
+    color: colors.error,
     fontWeight: '600',
   },
   list: {
