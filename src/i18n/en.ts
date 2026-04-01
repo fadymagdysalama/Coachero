@@ -137,6 +137,11 @@ export default {
     videoUrlPlaceholder: 'https://youtube.com/watch?v=...',
     watchVideo: 'Watch Video',
     programNameRequired: 'Program name is required',
+    duplicateProgram: 'Duplicate',
+    duplicating: 'Duplicating...',
+    moveUp: 'Move Up',
+    moveDown: 'Move Down',
+    dragHint: 'Hold & drag to reorder',
   },
   schedule: {
     title: 'Schedule',

@@ -6,6 +6,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useProgramStore } from '../../src/stores/programStore';
+import { supabase } from '../../src/lib/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
 
 type Difficulty = 'beginner' | 'intermediate' | 'advanced';
@@ -26,6 +27,14 @@ interface DayDraft {
   id: string;
   day_number: number;
   exercises: ExerciseDraft[];
+}
+
+function moveItem<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
+  if (toIndex < 0 || toIndex >= arr.length) return arr;
+  const result = [...arr];
+  const [item] = result.splice(fromIndex, 1);
+  result.splice(toIndex, 0, item);
+  return result;
 }
 
 export default function EditProgramScreen() {
@@ -112,6 +121,29 @@ export default function EditProgramScreen() {
     );
   };
 
+  // Move an exercise up or down within a day
+  const moveExercise = (dayId: string, exKey: string, direction: 'up' | 'down') => {
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.id !== dayId) return d;
+        const idx = d.exercises.findIndex((e) => e.key === exKey);
+        const toIdx = direction === 'up' ? idx - 1 : idx + 1;
+        return { ...d, exercises: moveItem(d.exercises, idx, toIdx) };
+      })
+    );
+  };
+
+  // Move a day up or down (local only – saved when pressing Save)
+  const moveDay = (dayId: string, direction: 'up' | 'down') => {
+    setDays((prev) => {
+      const idx = prev.findIndex((d) => d.id === dayId);
+      const toIdx = direction === 'up' ? idx - 1 : idx + 1;
+      const reordered = moveItem(prev, idx, toIdx);
+      // Reassign day_numbers based on new order
+      return reordered.map((d, i) => ({ ...d, day_number: i + 1 }));
+    });
+  };
+
   const handleSave = async () => {
     if (!title.trim()) return Alert.alert(t('common.error'), t('programs.programNameRequired'));
     setSaving(true);
@@ -120,6 +152,9 @@ export default function EditProgramScreen() {
     if (progErr) { setSaving(false); return Alert.alert(t('common.error'), progErr); }
 
     for (const day of days) {
+      // Persist reordered day_number
+      await supabase.from('program_days').update({ day_number: day.day_number }).eq('id', day.id);
+
       for (let i = 0; i < day.exercises.length; i++) {
         const ex = day.exercises[i];
         const data = {
@@ -224,91 +259,131 @@ export default function EditProgramScreen() {
 
         {/* Days & exercises */}
         <Text style={styles.sectionLabel}>{t('programs.step2')}</Text>
-        {days.map((day) => (
+        {days.map((day, dayIdx) => (
           <View key={day.id} style={styles.dayCard}>
-            <TouchableOpacity
-              style={styles.dayHeader}
-              onPress={() => setExpandedDay(expandedDay === day.id ? null : day.id)}
-            >
-              <Text style={styles.dayTitle}>{t('programs.day', { number: day.day_number })}</Text>
-              <Text style={styles.dayMeta}>
-                {day.exercises.length} {t('programs.exercises')}  {expandedDay === day.id ? '▲' : '▼'}
-              </Text>
-            </TouchableOpacity>
+            {/* Day header with reorder controls */}
+            <View style={styles.dayHeader}>
+              <View style={styles.dayReorderCol}>
+                <TouchableOpacity
+                  style={[styles.reorderBtn, dayIdx === 0 && styles.reorderBtnDisabled]}
+                  onPress={() => moveDay(day.id, 'up')}
+                  disabled={dayIdx === 0}
+                >
+                  <Text style={styles.reorderBtnText}>▲</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.reorderBtn, dayIdx === days.length - 1 && styles.reorderBtnDisabled]}
+                  onPress={() => moveDay(day.id, 'down')}
+                  disabled={dayIdx === days.length - 1}
+                >
+                  <Text style={styles.reorderBtnText}>▼</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.dayHeaderContent}
+                onPress={() => setExpandedDay(expandedDay === day.id ? null : day.id)}
+              >
+                <Text style={styles.dayTitle}>{t('programs.day', { number: day.day_number })}</Text>
+                <Text style={styles.dayMeta}>
+                  {day.exercises.length} {t('programs.exercises')}  {expandedDay === day.id ? '▲' : '▼'}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {expandedDay === day.id && (
               <View style={styles.dayBody}>
                 {day.exercises.length === 0 && (
                   <Text style={styles.noExText}>{t('programs.noExercises')}</Text>
                 )}
-                {day.exercises.map((ex) => (
+                {day.exercises.map((ex, exIdx) => (
                   <View key={ex.key} style={styles.exerciseRow}>
-                    {/* Name + remove */}
-                    <View style={styles.exerciseRowHeader}>
-                      <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        placeholder={t('programs.exerciseName')}
-                        placeholderTextColor={colors.textMuted}
-                        value={ex.exercise_name}
-                        onChangeText={(v) => updateLocal(day.id, ex.key, 'exercise_name', v)}
-                      />
+                    {/* Drag handle column */}
+                    <View style={styles.exReorderCol}>
                       <TouchableOpacity
-                        onPress={() => removeLocal(day.id, ex.key, ex.id)}
-                        style={styles.removeExBtn}
+                        style={[styles.reorderBtn, exIdx === 0 && styles.reorderBtnDisabled]}
+                        onPress={() => moveExercise(day.id, ex.key, 'up')}
+                        disabled={exIdx === 0}
                       >
-                        <Text style={styles.removeExText}>✕</Text>
+                        <Text style={styles.reorderBtnText}>▲</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.reorderBtn, exIdx === day.exercises.length - 1 && styles.reorderBtnDisabled]}
+                        onPress={() => moveExercise(day.id, ex.key, 'down')}
+                        disabled={exIdx === day.exercises.length - 1}
+                      >
+                        <Text style={styles.reorderBtnText}>▼</Text>
                       </TouchableOpacity>
                     </View>
 
-                    {/* YouTube URL */}
-                    <TextInput
-                      style={styles.input}
-                      placeholder={t('programs.videoUrlPlaceholder')}
-                      placeholderTextColor={colors.textMuted}
-                      value={ex.video_url}
-                      onChangeText={(v) => updateLocal(day.id, ex.key, 'video_url', v)}
-                      autoCapitalize="none"
-                      keyboardType="url"
-                    />
+                    {/* Exercise fields */}
+                    <View style={styles.exFieldsCol}>
+                      {/* Name + remove */}
+                      <View style={styles.exerciseRowHeader}>
+                        <TextInput
+                          style={[styles.input, { flex: 1 }]}
+                          placeholder={t('programs.exerciseName')}
+                          placeholderTextColor={colors.textMuted}
+                          value={ex.exercise_name}
+                          onChangeText={(v) => updateLocal(day.id, ex.key, 'exercise_name', v)}
+                        />
+                        <TouchableOpacity
+                          onPress={() => removeLocal(day.id, ex.key, ex.id)}
+                          style={styles.removeExBtn}
+                        >
+                          <Text style={styles.removeExText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
 
-                    {/* Sets / Reps / Rest */}
-                    <View style={styles.exerciseMiniRow}>
-                      <View style={[styles.fieldGroup, { flex: 1 }]}>
-                        <Text style={styles.miniLabel}>{t('programs.sets')}</Text>
-                        <TextInput
-                          style={styles.inputMini}
-                          keyboardType="number-pad"
-                          value={ex.sets}
-                          onChangeText={(v) => updateLocal(day.id, ex.key, 'sets', v)}
-                          maxLength={2}
-                        />
+                      {/* YouTube URL */}
+                      <TextInput
+                        style={styles.input}
+                        placeholder={t('programs.videoUrlPlaceholder')}
+                        placeholderTextColor={colors.textMuted}
+                        value={ex.video_url}
+                        onChangeText={(v) => updateLocal(day.id, ex.key, 'video_url', v)}
+                        autoCapitalize="none"
+                        keyboardType="url"
+                      />
+
+                      {/* Sets / Reps / Rest */}
+                      <View style={styles.exerciseMiniRow}>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.miniLabel}>{t('programs.sets')}</Text>
+                          <TextInput
+                            style={styles.inputMini}
+                            keyboardType="number-pad"
+                            value={ex.sets}
+                            onChangeText={(v) => updateLocal(day.id, ex.key, 'sets', v)}
+                            maxLength={2}
+                          />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.miniLabel}>{t('programs.reps')}</Text>
+                          <TextInput
+                            style={styles.inputMini}
+                            value={ex.reps}
+                            onChangeText={(v) => updateLocal(day.id, ex.key, 'reps', v)}
+                          />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.miniLabel}>{t('programs.restTime')}</Text>
+                          <TextInput
+                            style={styles.inputMini}
+                            value={ex.rest_time}
+                            onChangeText={(v) => updateLocal(day.id, ex.key, 'rest_time', v)}
+                          />
+                        </View>
                       </View>
-                      <View style={[styles.fieldGroup, { flex: 1 }]}>
-                        <Text style={styles.miniLabel}>{t('programs.reps')}</Text>
-                        <TextInput
-                          style={styles.inputMini}
-                          value={ex.reps}
-                          onChangeText={(v) => updateLocal(day.id, ex.key, 'reps', v)}
-                        />
-                      </View>
-                      <View style={[styles.fieldGroup, { flex: 1 }]}>
-                        <Text style={styles.miniLabel}>{t('programs.restTime')}</Text>
-                        <TextInput
-                          style={styles.inputMini}
-                          value={ex.rest_time}
-                          onChangeText={(v) => updateLocal(day.id, ex.key, 'rest_time', v)}
-                        />
-                      </View>
+
+                      {/* Notes */}
+                      <TextInput
+                        style={[styles.input, { marginTop: spacing.xs }]}
+                        placeholder={t('programs.notesPlaceholder')}
+                        placeholderTextColor={colors.textMuted}
+                        value={ex.notes}
+                        onChangeText={(v) => updateLocal(day.id, ex.key, 'notes', v)}
+                      />
                     </View>
-
-                    {/* Notes */}
-                    <TextInput
-                      style={[styles.input, { marginTop: spacing.xs }]}
-                      placeholder={t('programs.notesPlaceholder')}
-                      placeholderTextColor={colors.textMuted}
-                      value={ex.notes}
-                      onChangeText={(v) => updateLocal(day.id, ex.key, 'notes', v)}
-                    />
                   </View>
                 ))}
                 <TouchableOpacity style={styles.addExBtn} onPress={() => addLocal(day.id)}>
@@ -365,23 +440,39 @@ const styles = StyleSheet.create({
   pillText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textMuted },
   pillTextActive: { color: colors.textInverse },
 
+  // Day card
   dayCard: {
     backgroundColor: colors.card, borderRadius: borderRadius.md,
     borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
   },
   dayHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: spacing.md,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: spacing.sm, paddingRight: spacing.md,
+  },
+  dayReorderCol: {
+    width: 36, alignItems: 'center', justifyContent: 'center', gap: 2,
+    paddingLeft: spacing.sm,
+  },
+  dayHeaderContent: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingLeft: spacing.sm,
   },
   dayTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
   dayMeta: { fontSize: fontSize.sm, color: colors.textMuted },
   dayBody: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderLight, gap: spacing.md },
   noExText: { fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.sm },
 
+  // Exercise row
   exerciseRow: {
     backgroundColor: colors.surface, borderRadius: borderRadius.sm,
-    padding: spacing.sm, gap: spacing.xs, borderWidth: 1, borderColor: colors.borderLight,
+    borderWidth: 1, borderColor: colors.borderLight,
+    flexDirection: 'row', alignItems: 'flex-start',
   },
+  exReorderCol: {
+    width: 32, alignItems: 'center', justifyContent: 'center',
+    gap: 2, paddingTop: spacing.sm, paddingBottom: spacing.sm, paddingLeft: spacing.xs,
+  },
+  exFieldsCol: { flex: 1, padding: spacing.sm, gap: spacing.xs },
   exerciseRowHeader: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   exerciseMiniRow: { flexDirection: 'row', gap: spacing.sm },
   miniLabel: { fontSize: fontSize.xs, fontWeight: '600', color: colors.textMuted },
@@ -398,4 +489,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm, padding: spacing.sm, alignItems: 'center',
   },
   addExBtnText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.primaryLight },
+
+  // Reorder buttons (shared for days and exercises)
+  reorderBtn: { padding: 3, borderRadius: 4 },
+  reorderBtnDisabled: { opacity: 0.2 },
+  reorderBtnText: { fontSize: 11, color: colors.primary, fontWeight: '700' },
+  reorderBtnTextDisabled: { color: colors.textMuted },
 });

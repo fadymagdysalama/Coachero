@@ -42,6 +42,8 @@ interface ProgramState {
   assignProgram: (programId: string, clientId: string) => Promise<{ error: string | null }>;
   unassignProgram: (programId: string, clientId: string) => Promise<{ error: string | null }>;
   fetchProgramAssignments: (programId: string) => Promise<string[]>; // returns clientIds
+  duplicateProgram: (id: string) => Promise<{ id: string | null; error: string | null }>;
+  reorderDay: (programId: string, dayId: string, direction: 'up' | 'down') => Promise<{ error: string | null }>;
 
   // Shared
   fetchProgramWithDays: (programId: string) => Promise<void>;
@@ -175,6 +177,102 @@ export const useProgramStore = create<ProgramState>((set, get) => ({
       .select('client_id')
       .eq('program_id', programId);
     return (data ?? []).map((r: any) => r.client_id);
+  },
+
+  // ─── Coach: duplicate a program (new id, copied days + exercises) ─────────
+  duplicateProgram: async (id) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { id: null, error: 'Not authenticated' };
+
+    // Fetch original
+    const { data: orig, error: origErr } = await supabase
+      .from('programs')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (origErr || !orig) return { id: null, error: origErr?.message ?? 'Not found' };
+
+    // Create new program
+    const { data: newProg, error: progErr } = await supabase
+      .from('programs')
+      .insert({
+        creator_id: user.id,
+        title: `${orig.title} (Copy)`,
+        description: orig.description,
+        difficulty: orig.difficulty,
+        duration_days: orig.duration_days,
+        type: orig.type,
+        price: orig.price,
+        is_published: false,
+      })
+      .select()
+      .single();
+    if (progErr || !newProg) return { id: null, error: progErr?.message ?? 'Failed to create' };
+
+    // Fetch original days
+    const { data: origDays } = await supabase
+      .from('program_days')
+      .select('*')
+      .eq('program_id', id)
+      .order('day_number', { ascending: true });
+
+    for (const day of origDays ?? []) {
+      const { data: newDay } = await supabase
+        .from('program_days')
+        .insert({ program_id: newProg.id, day_number: day.day_number })
+        .select()
+        .single();
+      if (!newDay) continue;
+
+      // Fetch exercises for this day
+      const { data: exs } = await supabase
+        .from('program_exercises')
+        .select('*')
+        .eq('day_id', day.id)
+        .order('order_index', { ascending: true });
+
+      for (const ex of exs ?? []) {
+        await supabase.from('program_exercises').insert({
+          day_id: newDay.id,
+          exercise_name: ex.exercise_name,
+          video_url: ex.video_url,
+          sets: ex.sets,
+          reps: ex.reps,
+          rest_time: ex.rest_time,
+          notes: ex.notes,
+          order_index: ex.order_index,
+        });
+      }
+    }
+
+    set((s) => ({ myPrograms: [newProg, ...s.myPrograms] }));
+    return { id: newProg.id, error: null };
+  },
+
+  // ─── Coach: reorder a day up or down within a program ────────────────────
+  reorderDay: async (programId, dayId, direction) => {
+    const { data: days, error } = await supabase
+      .from('program_days')
+      .select('*')
+      .eq('program_id', programId)
+      .order('day_number', { ascending: true });
+    if (error || !days) return { error: error?.message ?? 'Failed to fetch days' };
+
+    const idx = days.findIndex((d: any) => d.id === dayId);
+    if (idx === -1) return { error: 'Day not found' };
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= days.length) return { error: null };
+
+    const dayA = days[idx];
+    const dayB = days[swapIdx];
+    const numA = dayA.day_number;
+    const numB = dayB.day_number;
+
+    // Swap day_numbers
+    await supabase.from('program_days').update({ day_number: numB }).eq('id', dayA.id);
+    await supabase.from('program_days').update({ day_number: numA }).eq('id', dayB.id);
+
+    return { error: null };
   },
 
   // ─── Shared: load full program with days + exercises ─────────────────────

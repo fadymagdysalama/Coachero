@@ -137,6 +137,11 @@ export default {
     videoUrlPlaceholder: 'https://youtube.com/watch?v=...',
     watchVideo: 'مشاهدة الفيديو',
     programNameRequired: 'اسم البرنامج مطلوب',
+    duplicateProgram: 'نسخ',
+    duplicating: 'جاري النسخ...',
+    moveUp: 'تحريك للأعلى',
+    moveDown: 'تحريك للأسفل',
+    dragHint: 'اسحب لإعادة الترتيب',
   },
   schedule: {
     title: 'الجدول',

@@ -31,8 +31,9 @@ function DifficultyBadge({ level }: { level: string }) {
 function CoachView() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { myPrograms, isLoading, fetchMyPrograms, deleteProgram } = useProgramStore();
+  const { myPrograms, isLoading, fetchMyPrograms, deleteProgram, duplicateProgram } = useProgramStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
 
   useEffect(() => { fetchMyPrograms(); }, []);
 
@@ -54,6 +55,14 @@ function CoachView() {
         },
       },
     ]);
+  };
+
+  const handleDuplicate = async (p: Program) => {
+    setDuplicating(p.id);
+    const { id: newId, error } = await duplicateProgram(p.id);
+    setDuplicating(null);
+    if (error) { Alert.alert(t('common.error'), error); return; }
+    if (newId) router.push({ pathname: '/programs/edit', params: { id: newId } });
   };
 
   if (isLoading && !refreshing) {
@@ -101,6 +110,16 @@ function CoachView() {
                   onPress={() => router.push({ pathname: '/programs/assign', params: { id: p.id } })}
                 >
                   <Text style={styles.assignBtnText}>{t('programs.assignToClient')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.duplicateBtn}
+                  onPress={() => handleDuplicate(p)}
+                  disabled={duplicating === p.id}
+                >
+                  {duplicating === p.id
+                    ? <ActivityIndicator size="small" color={colors.accent} />
+                    : <Text style={styles.duplicateBtnText}>{t('programs.duplicateProgram')}</Text>
+                  }
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => handleDelete(p)}>
                   <Text style={styles.deleteText}>{t('common.delete')}</Text>
@@ -330,6 +349,21 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: fontSize.xs,
     fontWeight: '500',
+  },
+  duplicateBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  duplicateBtnText: {
+    color: colors.accent,
+    fontSize: fontSize.xs,
+    fontWeight: '600',
   },
   badge: {
     paddingHorizontal: spacing.sm,
