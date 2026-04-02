@@ -27,6 +27,12 @@ interface TierConfig {
   color: string;
 }
 
+const TIER_RANK: Record<SubscriptionTier, number> = {
+  starter: 0,
+  pro: 1,
+  business: 2,
+};
+
 const TIERS: TierConfig[] = [
   {
     id: 'starter',
@@ -100,13 +106,19 @@ export default function SubscriptionScreen() {
   const handleSelect = (tier: SubscriptionTier) => {
     if (tier === currentTier) return;
 
+    const isUpgrade = TIER_RANK[tier] > TIER_RANK[currentTier];
+
     Alert.alert(
-      t('subscription.confirmUpgrade', { tier: t(`subscription.${tier}Name` as any) }),
-      t('subscription.confirmUpgradeDesc'),
+      isUpgrade
+        ? t('subscription.confirmUpgrade', { tier: t(`subscription.${tier}Name` as any) })
+        : t('subscription.confirmDowngrade', { tier: t(`subscription.${tier}Name` as any) }),
+      tier !== 'starter'
+        ? t('subscription.confirmRecurringDesc', { tier: t(`subscription.${tier}Name` as any), price: t(`subscription.${tier}Price` as any) })
+        : t('subscription.confirmDowngradeDesc'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: tier > currentTier ? t('subscription.upgrade') : t('subscription.downgrade'),
+          text: isUpgrade ? t('subscription.upgrade') : t('subscription.downgrade'),
           onPress: async () => {
             try {
               setUpgrading(tier);
@@ -172,6 +184,7 @@ export default function SubscriptionScreen() {
         {TIERS.map((tier) => {
           const isCurrent = tier.id === currentTier;
           const isUpgrading = upgrading === tier.id;
+          const isUpgrade = TIER_RANK[tier.id] > TIER_RANK[currentTier];
 
           return (
             <View
@@ -230,7 +243,7 @@ export default function SubscriptionScreen() {
                   <Text style={[styles.selectBtnText, isCurrent && styles.selectBtnTextCurrent]}>
                     {isCurrent
                       ? t('subscription.currentPlan')
-                      : tier.id > currentTier
+                      : isUpgrade
                         ? t('subscription.upgrade')
                         : t('subscription.downgrade')}
                   </Text>
@@ -240,8 +253,13 @@ export default function SubscriptionScreen() {
           );
         })}
 
+        <View style={styles.recurringBanner}>
+          <Text style={styles.recurringIcon}>🔄</Text>
+          <Text style={styles.recurringText}>{t('subscription.recurringNotice')}</Text>
+        </View>
+
         <Text style={styles.footnote}>
-          Subscription changes take effect immediately. Paymob billing applies in production.
+          {t('subscription.footnote')}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -356,6 +374,25 @@ const styles = StyleSheet.create({
   },
   selectBtnText: { fontSize: fontSize.md, fontWeight: '700', color: colors.textInverse },
   selectBtnTextCurrent: { color: colors.success },
+
+  recurringBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: `${colors.primary}10`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}25`,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  recurringIcon: { fontSize: fontSize.md },
+  recurringText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
 
   footnote: {
     fontSize: fontSize.xs,

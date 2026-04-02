@@ -83,6 +83,7 @@ export default function ProfileScreen() {
               title="Manage Subscription"
               onPress={() => router.push('/marketplace/subscription')}
               style={styles.settingButton}
+              textStyle={{ color: '#FFFFFF' }}
             />
           </View>
         )}

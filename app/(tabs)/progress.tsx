@@ -395,6 +395,7 @@ export default function ProgressScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.tabBar}
         contentContainerStyle={styles.tabBarContent}
       >
         {sections.map((s) => (
@@ -430,7 +431,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing['2xl'],
     paddingTop: spacing.md,
-    paddingBottom: 0,
+    paddingBottom: spacing.sm,
   },
   title: { fontSize: fontSize['2xl'], fontWeight: '700', color: colors.text },
 
@@ -452,12 +453,13 @@ const styles = StyleSheet.create({
   // Scrollable pill tabs
   tabBar: {
     backgroundColor: 'transparent',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   tabBarContent: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
     alignItems: 'center',
   },
@@ -483,7 +485,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  content: { paddingHorizontal: spacing['2xl'], paddingBottom: 80, paddingTop: spacing.sm },
+  content: { paddingHorizontal: spacing['2xl'], paddingBottom: 80, paddingTop: spacing.md },
 
   addButton: {
     backgroundColor: colors.primary,
