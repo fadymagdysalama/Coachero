@@ -85,8 +85,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   clearAll: async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('notifications').delete().eq('user_id', user.id);
-    set({ notifications: [], unreadCount: 0 });
+    const { error } = await supabase.from('notifications').delete().eq('user_id', user.id);
+    if (!error) {
+      set({ notifications: [], unreadCount: 0 });
+    }
   },
 
   subscribeToNotifications: (userId) => {

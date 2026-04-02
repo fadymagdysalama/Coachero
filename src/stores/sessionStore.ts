@@ -309,11 +309,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Notify coach that client left
     const leavingSession = get().sessions.find((s) => s.id === sessionId);
     if (leavingSession) {
+      const { data: clientProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', user.id)
+        .single();
+      const clientName = clientProfile?.display_name ?? 'A client';
       sendNotification({
         recipient_id: leavingSession.coach_id,
         type: 'session_left',
         title: 'Client Cancelled Booking',
-        body: `A client cancelled their booking for ${leavingSession.date} at ${leavingSession.start_time}.`,
+        body: `${clientName} cancelled their booking for ${leavingSession.date} at ${leavingSession.start_time}.`,
         data: { session_id: sessionId },
       });
     }
@@ -456,11 +462,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     // Notify the coach
     if (session) {
+      const { data: clientProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', user.id)
+        .single();
+      const clientName = clientProfile?.display_name ?? 'A client';
       sendNotification({
         recipient_id: session.coach_id,
         type: 'session_booked',
         title: 'New Booking ✅',
-        body: `A client booked your session on ${session.date} at ${session.start_time}.`,
+        body: `${clientName} booked your session on ${session.date} at ${session.start_time}.`,
         data: { session_id: sessionId },
       });
     }

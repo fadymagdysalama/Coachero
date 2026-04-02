@@ -110,6 +110,7 @@ export function CalendarPicker({
             const isToday = dateStr === todayStr;
             const isMarked = markedSet.has(dateStr);
             const isDisabled = Boolean(minDate && dateStr < minDate);
+            const isPast = !isSelected && !isToday && dateStr < todayStr;
 
             return (
               <TouchableOpacity
@@ -119,6 +120,7 @@ export function CalendarPicker({
                   isSelected && styles.cellSelected,
                   isToday && !isSelected && styles.cellToday,
                   isDisabled && styles.cellDisabled,
+                  isPast && styles.cellPast,
                 ]}
                 onPress={() => onSelectDate?.(dateStr)}
                 disabled={isDisabled || !onSelectDate}
@@ -217,6 +219,9 @@ const styles = StyleSheet.create({
   },
   cellDisabled: {
     opacity: 0.3,
+  },
+  cellPast: {
+    opacity: 0.35,
   },
   cellText: {
     fontSize: fontSize.sm,

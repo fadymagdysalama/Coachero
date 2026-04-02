@@ -78,7 +78,7 @@ function formatSessionDate(date: string): string {
 export default function HomeScreen() {
   const { t } = useTranslation();
   const { profile } = useAuthStore();
-  const { unreadCount } = useNotificationStore();
+  const { unreadCount, fetchNotifications } = useNotificationStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSessionItem[]>([]);
   const [todayWorkout, setTodayWorkout] = useState<{
@@ -101,6 +101,8 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      fetchNotifications();
+
       let isMounted = true;
 
       const loadDashboard = async () => {
@@ -230,7 +232,7 @@ export default function HomeScreen() {
       return () => {
         isMounted = false;
       };
-    }, [isCoach, profile.id, t])
+    }, [isCoach, profile.id, t, fetchNotifications])
   );
 
   return (

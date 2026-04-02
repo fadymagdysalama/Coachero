@@ -24,4 +24,5 @@ if (Platform.OS === 'android') {
   }).catch(() => {});
 }
 
-import 'expo-router/entry';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+require('expo-router/entry');

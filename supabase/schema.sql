@@ -449,6 +449,8 @@ CREATE POLICY "Users see own notifications" ON notifications
   FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can update own notifications" ON notifications
   FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own notifications" ON notifications
+  FOR DELETE USING (auth.uid() = user_id);
 
 -- BODY MEASUREMENTS: Own data + coach can view
 CREATE POLICY "Users manage own measurements" ON body_measurements
