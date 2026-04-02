@@ -174,6 +174,8 @@ Deno.serve(async (req: Request) => {
       },
       currency: 'EGP',
       integration_id: parseInt(integrationId, 10),
+      // Request card tokenization so we can charge this card automatically on renewal
+      save_card: true,
     }),
   });
 

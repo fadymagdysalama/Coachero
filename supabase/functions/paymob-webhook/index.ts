@@ -128,6 +128,21 @@ Deno.serve(async (req: Request) => {
 
     const paymentRef = String(transaction.id ?? merchantOrderId);
 
+    // Paymob returns the card token in source_data when save_card: true was set
+    const sourceData = transaction.source_data as Record<string, unknown> | undefined;
+    const cardToken = String(sourceData?.token ?? '');
+
+    // Set the billing period end to 30 days from now
+    const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const upsertBody: Record<string, unknown> = {
+      coach_id: coachId,
+      tier,
+      payment_ref: paymentRef,
+      current_period_end: periodEnd,
+    };
+    if (cardToken) upsertBody.payment_token = cardToken;
+
     const res = await fetch(`${supabaseUrl}/rest/v1/coach_subscriptions`, {
       method: 'POST',
       headers: {
@@ -136,7 +151,7 @@ Deno.serve(async (req: Request) => {
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates',
       },
-      body: JSON.stringify({ coach_id: coachId, tier, payment_ref: paymentRef }),
+      body: JSON.stringify(upsertBody),
     });
 
     if (!res.ok) {

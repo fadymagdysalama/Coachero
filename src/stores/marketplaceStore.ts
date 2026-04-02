@@ -212,8 +212,9 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Use the safe view — excludes payment_token from client-side reads
     const { data } = await supabase
-      .from('coach_subscriptions')
+      .from('coach_subscription_safe')
       .select('*')
       .eq('coach_id', user.id)
       .maybeSingle();
