@@ -154,6 +154,10 @@ export default {
     yourFeedback: 'Your Feedback',
     feedbackSaved: 'Feedback saved!',
     editFeedback: 'Edit',
+    superset: 'Superset',
+    supersetLabel: 'Superset {{label}}',
+    linkAsSuperset: 'Link as Superset',
+    unlinkSuperset: 'Linked',
   },
   marketplace: {
     title: 'Marketplace',

@@ -11,6 +11,11 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+
+const SS_COLOR = '#EA580C'; // superset accent – vibrant orange
+const SS_BG = '#FFF7ED';
+const getSupersetLetter = (group: number) =>
+  String.fromCharCode(64 + ((group - 1) % 26) + 1); // 1→A, 2→B …
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useProgramStore } from '../../src/stores/programStore';
@@ -114,20 +119,54 @@ interface ExerciseDraft {
   rest_time: string;
   notes: string;
   video_url: string;
+  superset_group: number | null;
+}
+
+// ─── Superset connector shown between two adjacent exercise rows ──────────────
+function SupersetConnector({
+  isLinked,
+  label,
+  onToggle,
+}: {
+  isLinked: boolean;
+  label?: string;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <TouchableOpacity
+      style={[styles.ssConnector, isLinked && styles.ssConnectorLinked]}
+      onPress={onToggle}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.ssLine, isLinked && styles.ssLineLinked]} />
+      <View style={[styles.ssPill, isLinked && styles.ssPillLinked]}>
+        <Text style={[styles.ssPillText, isLinked && styles.ssPillTextLinked]}>
+          {isLinked ? `⚡ SS-${label}  ${t('programs.unlinkSuperset')}` : `+ ${t('programs.linkAsSuperset')}`}
+        </Text>
+      </View>
+      <View style={[styles.ssLine, isLinked && styles.ssLineLinked]} />
+    </TouchableOpacity>
+  );
 }
 
 function ExerciseRow({
   ex,
   onChange,
   onRemove,
+  supersetLabel,
 }: {
   ex: ExerciseDraft;
   onChange: (field: keyof ExerciseDraft, value: string) => void;
   onRemove: () => void;
+  supersetLabel?: string;
 }) {
   const { t } = useTranslation();
+  const inSuperset = ex.superset_group !== null;
   return (
-    <View style={styles.exerciseRow}>
+    <View style={[styles.exerciseRow, inSuperset && styles.exerciseRowSuperset]}>
+      {inSuperset && <View style={styles.ssSidebar} />}
+      <View style={styles.exerciseRowInner}>
       <View style={styles.exerciseRowHeader}>
         <TextInput
           style={[styles.input, { flex: 1 }]}
@@ -136,6 +175,11 @@ function ExerciseRow({
           value={ex.exercise_name}
           onChangeText={(v) => onChange('exercise_name', v)}
         />
+        {inSuperset && (
+          <View style={styles.ssBadge}>
+            <Text style={styles.ssBadgeText}>⚡ {supersetLabel}</Text>
+          </View>
+        )}
         <TouchableOpacity onPress={onRemove} style={styles.removeExBtn}>
           <Text style={styles.removeExText}>✕</Text>
         </TouchableOpacity>
@@ -190,6 +234,7 @@ function ExerciseRow({
         value={ex.notes}
         onChangeText={(v) => onChange('notes', v)}
       />
+      </View>
     </View>
   );
 }
@@ -226,6 +271,7 @@ function Step2({
       rest_time: '60s',
       notes: '',
       video_url: '',
+      superset_group: null,
     };
     setDays(days.map((d) => d.key === dayKey ? { ...d, exercises: [...d.exercises, newEx] } : d));
   };
@@ -241,6 +287,39 @@ function Step2({
     setDays(days.map((d) => d.key !== dayKey ? d : {
       ...d,
       exercises: d.exercises.filter((e) => e.key !== exKey),
+    }));
+  };
+
+  const toggleSupersetLink = (dayKey: string, exIndex: number) => {
+    const day = days.find((d) => d.key === dayKey);
+    if (!day || exIndex >= day.exercises.length - 1) return;
+    const ex1 = day.exercises[exIndex];
+    const ex2 = day.exercises[exIndex + 1];
+
+    if (ex1.superset_group !== null && ex1.superset_group === ex2.superset_group) {
+      // They are already linked – unlink
+      const groupMembers = day.exercises.filter((e) => e.superset_group === ex1.superset_group);
+      setDays(days.map((d) => d.key !== dayKey ? d : {
+        ...d,
+        exercises: groupMembers.length <= 2
+          ? d.exercises.map((e) => e.superset_group === ex1.superset_group ? { ...e, superset_group: null } : e)
+          : d.exercises.map((e) => e.key === ex2.key ? { ...e, superset_group: null } : e),
+      }));
+      return;
+    }
+
+    // Link them together
+    let targetGroup = ex1.superset_group ?? ex2.superset_group;
+    if (targetGroup === null) {
+      const used = day.exercises.map((e) => e.superset_group).filter((g): g is number => g !== null);
+      targetGroup = used.length > 0 ? Math.max(...used) + 1 : 1;
+    }
+    const group = targetGroup;
+    setDays(days.map((d) => d.key !== dayKey ? d : {
+      ...d,
+      exercises: d.exercises.map((e, i) =>
+        (i === exIndex || i === exIndex + 1) ? { ...e, superset_group: group } : e
+      ),
     }));
   };
 
@@ -265,13 +344,31 @@ function Step2({
               {day.exercises.length === 0 && (
                 <Text style={styles.noExText}>{t('programs.noExercises')}</Text>
               )}
-              {day.exercises.map((ex) => (
-                <ExerciseRow
-                  key={ex.key}
-                  ex={ex}
-                  onChange={(field, value) => updateExercise(day.key, ex.key, field, value)}
-                  onRemove={() => removeExercise(day.key, ex.key)}
-                />
+              {day.exercises.map((ex, exIdx) => (
+                <React.Fragment key={ex.key}>
+                  <ExerciseRow
+                    ex={ex}
+                    supersetLabel={
+                      ex.superset_group !== null ? getSupersetLetter(ex.superset_group) : undefined
+                    }
+                    onChange={(field, value) => updateExercise(day.key, ex.key, field, value)}
+                    onRemove={() => removeExercise(day.key, ex.key)}
+                  />
+                  {exIdx < day.exercises.length - 1 && (
+                    <SupersetConnector
+                      isLinked={
+                        ex.superset_group !== null &&
+                        ex.superset_group === day.exercises[exIdx + 1].superset_group
+                      }
+                      label={
+                        ex.superset_group !== null
+                          ? getSupersetLetter(ex.superset_group)
+                          : undefined
+                      }
+                      onToggle={() => toggleSupersetLink(day.key, exIdx)}
+                    />
+                  )}
+                </React.Fragment>
               ))}
               <TouchableOpacity
                 style={styles.addExBtn}
@@ -362,6 +459,7 @@ export default function CreateProgramScreen() {
           notes: ex.notes.trim(),
           video_url: ex.video_url.trim(),
           order_index: i,
+          superset_group: ex.superset_group ?? null,
         });
       }
     }
@@ -469,9 +567,27 @@ const styles = StyleSheet.create({
   // Exercise rows
   exerciseRow: {
     backgroundColor: colors.surface, borderRadius: borderRadius.sm,
-    padding: spacing.sm, gap: spacing.xs, borderWidth: 1, borderColor: colors.borderLight,
+    borderWidth: 1, borderColor: colors.borderLight, overflow: 'hidden',
   },
+  exerciseRowSuperset: {
+    borderColor: SS_COLOR,
+    backgroundColor: SS_BG,
+  },
+  ssSidebar: {
+    width: 4,
+    backgroundColor: SS_COLOR,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+  },
+  exerciseRowInner: { padding: spacing.sm, gap: spacing.xs },
   exerciseRowHeader: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  ssBadge: {
+    backgroundColor: SS_COLOR, borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm, paddingVertical: 2,
+  },
+  ssBadgeText: { fontSize: fontSize.xs, fontWeight: '700', color: '#fff' },
   exerciseMiniRow: { flexDirection: 'row', gap: spacing.sm },
   miniLabel: { fontSize: fontSize.xs, fontWeight: '600', color: colors.textMuted },
   inputMini: {
@@ -487,4 +603,24 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm, padding: spacing.sm, alignItems: 'center',
   },
   addExBtnText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.primaryLight },
+
+  // Superset connector
+  ssConnector: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingVertical: 2,
+  },
+  ssConnectorLinked: {},
+  ssLine: { flex: 1, height: 1, backgroundColor: colors.borderLight },
+  ssLineLinked: { backgroundColor: SS_COLOR },
+  ssPill: {
+    borderWidth: 1, borderColor: colors.borderLight, borderStyle: 'dashed',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm, paddingVertical: 2,
+    backgroundColor: colors.surface,
+  },
+  ssPillLinked: {
+    backgroundColor: `${SS_COLOR}18`, borderColor: SS_COLOR, borderStyle: 'solid',
+  },
+  ssPillText: { fontSize: fontSize.xs, fontWeight: '500', color: colors.textMuted },
+  ssPillTextLinked: { color: SS_COLOR, fontWeight: '700' },
 });

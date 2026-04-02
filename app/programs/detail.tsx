@@ -15,12 +15,95 @@ import { useTranslation } from 'react-i18next';
 import { useProgramStore } from '../../src/stores/programStore';
 import { useAuthStore } from '../../src/stores/authStore';
 import { colors, spacing, fontSize, borderRadius } from '../../src/constants/theme';
+import type { ProgramExercise } from '../../src/types';
 
 const DIFFICULTY_COLOR: Record<string, string> = {
   beginner: colors.success,
   intermediate: colors.warning,
   advanced: colors.error,
 };
+
+const SS_COLOR = '#EA580C';
+const getSupersetLetter = (group: number) =>
+  String.fromCharCode(64 + ((group - 1) % 26) + 1);
+
+// ─── Group consecutive exercises with shared superset_group ────────────────────
+type ExSegment =
+  | { type: 'single'; exercise: ProgramExercise; idx: number }
+  | { type: 'superset'; group: number; label: string; exercises: Array<{ ex: ProgramExercise; idx: number }> };
+
+function groupExercises(exercises: ProgramExercise[]): ExSegment[] {
+  const segments: ExSegment[] = [];
+  const visited = new Set<string>();
+  exercises.forEach((ex, idx) => {
+    if (visited.has(ex.id)) return;
+    const sg = ex.superset_group;
+    if (sg !== null && sg !== undefined) {
+      const members = exercises
+        .map((e, i) => ({ e, i }))
+        .filter(({ e }) => e.superset_group === sg && !visited.has(e.id));
+      members.forEach(({ e }) => visited.add(e.id));
+      segments.push({
+        type: 'superset',
+        group: sg,
+        label: getSupersetLetter(sg),
+        exercises: members.map(({ e, i }) => ({ ex: e, idx: i })),
+      });
+    } else {
+      visited.add(ex.id);
+      segments.push({ type: 'single', exercise: ex, idx });
+    }
+  });
+  return segments;
+}
+
+// ─── Single exercise card (shared renderer) ────────────────────────────────────
+function ExerciseCard({
+  ex,
+  idx,
+  inSuperset = false,
+}: {
+  ex: ProgramExercise;
+  idx: number;
+  inSuperset?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={[styles.exerciseCard, inSuperset && detailStyles.exerciseCardInSuperset]}>
+      <View style={styles.exerciseTop}>
+        <View style={styles.exerciseIndex}>
+          <Text style={styles.exerciseIndexText}>{idx + 1}</Text>
+        </View>
+        <Text style={styles.exerciseName}>{ex.exercise_name}</Text>
+      </View>
+      <View style={styles.exerciseMeta}>
+        <View style={styles.statChip}>
+          <Text style={styles.statChipText}>
+            {t('programs.sets_reps', { sets: ex.sets, reps: ex.reps })}
+          </Text>
+        </View>
+        {!!ex.rest_time && (
+          <View style={styles.statChip}>
+            <Text style={styles.statChipText}>
+              {t('programs.rest', { time: ex.rest_time })}
+            </Text>
+          </View>
+        )}
+      </View>
+      {!!ex.notes && (
+        <Text style={styles.exerciseNotes}>{ex.notes}</Text>
+      )}
+      {!!(ex as any).video_url && (
+        <TouchableOpacity
+          style={styles.videoLink}
+          onPress={() => Linking.openURL((ex as any).video_url)}
+        >
+          <Text style={styles.videoLinkText}>▶ {t('programs.watchVideo')}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
 
 export default function ProgramDetailScreen() {
   const { t } = useTranslation();
@@ -167,41 +250,34 @@ export default function ProgramDetailScreen() {
                 {day.exercises.length === 0 ? (
                   <Text style={styles.noExText}>{t('programs.noExercises')}</Text>
                 ) : (
-                  day.exercises.map((ex, idx) => (
-                    <View key={ex.id} style={styles.exerciseCard}>
-                      <View style={styles.exerciseTop}>
-                        <View style={styles.exerciseIndex}>
-                          <Text style={styles.exerciseIndexText}>{idx + 1}</Text>
-                        </View>
-                        <Text style={styles.exerciseName}>{ex.exercise_name}</Text>
-                      </View>
-                      <View style={styles.exerciseMeta}>
-                        <View style={styles.statChip}>
-                          <Text style={styles.statChipText}>
-                            {t('programs.sets_reps', { sets: ex.sets, reps: ex.reps })}
-                          </Text>
-                        </View>
-                        {!!ex.rest_time && (
-                          <View style={styles.statChip}>
-                            <Text style={styles.statChipText}>
-                              {t('programs.rest', { time: ex.rest_time })}
-                            </Text>
+                  groupExercises(day.exercises).map((segment, segIdx) => {
+                    if (segment.type === 'superset') {
+                      return (
+                        <View key={`ss-${segment.group}-${segIdx}`} style={detailStyles.supersetBlock}>
+                          <View style={detailStyles.supersetHeader}>
+                            <View style={detailStyles.supersetHeaderLine} />
+                            <View style={detailStyles.supersetHeaderPill}>
+                              <Text style={detailStyles.supersetHeaderText}>
+                                ⚡ {t('programs.supersetLabel', { label: segment.label })}
+                              </Text>
+                            </View>
+                            <View style={detailStyles.supersetHeaderLine} />
                           </View>
-                        )}
-                      </View>
-                      {!!ex.notes && (
-                        <Text style={styles.exerciseNotes}>{ex.notes}</Text>
-                      )}
-                      {!!(ex as any).video_url && (
-                        <TouchableOpacity
-                          style={styles.videoLink}
-                          onPress={() => Linking.openURL((ex as any).video_url)}
-                        >
-                          <Text style={styles.videoLinkText}>▶ {t('programs.watchVideo')}</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  ))
+                          {segment.exercises.map(({ ex, idx }, ssIdx) => (
+                            <React.Fragment key={ex.id}>
+                              <ExerciseCard ex={ex} idx={idx} inSuperset />
+                              {ssIdx < segment.exercises.length - 1 && (
+                                <View style={detailStyles.supersetDivider}>
+                                  <Text style={detailStyles.supersetDividerText}>↩ continue</Text>
+                                </View>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </View>
+                      );
+                    }
+                    return <ExerciseCard key={segment.exercise.id} ex={segment.exercise} idx={segment.idx} />;
+                  })
                 )}
                 {/* Mark Complete button – clients only */}
                 {!isCoach && (
@@ -467,4 +543,48 @@ const styles = StyleSheet.create({
   },
   feedbackSaveBtnDisabled: { opacity: 0.6 },
   feedbackSaveText: { fontSize: fontSize.sm, color: '#fff', fontWeight: '600' },
+});
+
+// Superset-specific styles for the detail view
+const detailStyles = StyleSheet.create({
+  // Superset block wrapper
+  supersetBlock: {
+    borderWidth: 1.5,
+    borderColor: SS_COLOR,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: '#FFF7ED',
+    gap: 0,
+  },
+  supersetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: `${SS_COLOR}18`,
+  },
+  supersetHeaderLine: { flex: 1, height: 1, backgroundColor: `${SS_COLOR}50` },
+  supersetHeaderPill: {
+    backgroundColor: SS_COLOR,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 3,
+  },
+  supersetHeaderText: { fontSize: fontSize.xs, fontWeight: '700', color: '#fff', letterSpacing: 0.5 },
+  // Exercises inside a superset card don't need their own border
+  exerciseCardInSuperset: {
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: `${SS_COLOR}30`,
+  },
+  // Divider between two exercises inside a superset
+  supersetDivider: {
+    alignItems: 'center',
+    paddingVertical: 4,
+    backgroundColor: `${SS_COLOR}10`,
+  },
+  supersetDividerText: { fontSize: fontSize.xs, color: SS_COLOR, fontWeight: '600' },
 });

@@ -154,6 +154,10 @@ export default {
     yourFeedback: 'ملاحظتك',
     feedbackSaved: 'تم حفظ الملاحظة!',
     editFeedback: 'تعديل',
+    superset: 'سوبر سيت',
+    supersetLabel: 'سوبر سيت {{label}}',
+    linkAsSuperset: 'ربط كسوبر سيت',
+    unlinkSuperset: 'مرتبط',
   },
   marketplace: {
     title: 'السوق',

@@ -50,6 +50,7 @@ export interface ProgramExercise {
   rest_time: string | null;
   notes: string | null;
   order_index: number;
+  superset_group: number | null;
 }
 
 export interface ProgramAssignment {

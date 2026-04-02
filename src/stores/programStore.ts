@@ -37,10 +37,10 @@ interface ProgramState {
   addDay: (programId: string, dayNumber: number) => Promise<{ id: string | null; error: string | null }>;
   addExercise: (
     dayId: string,
-    data: { exercise_name: string; sets: number; reps: string; rest_time: string; notes: string; video_url?: string; order_index: number }
+    data: { exercise_name: string; sets: number; reps: string; rest_time: string; notes: string; video_url?: string; order_index: number; superset_group?: number | null }
   ) => Promise<{ id: string | null; error: string | null }>;
   deleteExercise: (id: string) => Promise<{ error: string | null }>;
-  updateExercise: (id: string, data: { exercise_name: string; sets: number; reps: string; rest_time: string; notes: string; video_url?: string; order_index: number }) => Promise<{ error: string | null }>;
+  updateExercise: (id: string, data: { exercise_name: string; sets: number; reps: string; rest_time: string; notes: string; video_url?: string; order_index: number; superset_group?: number | null }) => Promise<{ error: string | null }>;
   assignProgram: (programId: string, clientId: string) => Promise<{ error: string | null }>;
   unassignProgram: (programId: string, clientId: string) => Promise<{ error: string | null }>;
   fetchProgramAssignments: (programId: string) => Promise<string[]>; // returns clientIds
@@ -259,6 +259,7 @@ export const useProgramStore = create<ProgramState>((set, get) => ({
           rest_time: ex.rest_time,
           notes: ex.notes,
           order_index: ex.order_index,
+          superset_group: ex.superset_group ?? null,
         });
       }
     }
