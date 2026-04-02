@@ -81,9 +81,10 @@ const TIERS: TierConfig[] = [
 export default function SubscriptionScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { coachSubscription, fetchCoachSubscription, upgradeSubscription } = useMarketplaceStore();
+  const { coachSubscription, fetchCoachSubscription, upgradeSubscription, cancelSubscription } = useMarketplaceStore();
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState<SubscriptionTier | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const awaitingPayment = useRef(false);
 
   useEffect(() => {
@@ -102,6 +103,35 @@ export default function SubscriptionScreen() {
   }, []);
 
   const currentTier: SubscriptionTier = coachSubscription?.tier ?? 'starter';
+
+  const handleCancel = () => {
+    Alert.alert(
+      t('subscription.cancelTitle'),
+      t('subscription.cancelDesc'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('subscription.cancelConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancelling(true);
+              const result = await cancelSubscription();
+              if (result.error) {
+                Alert.alert(t('common.error'), result.error);
+              } else {
+                Alert.alert(t('subscription.cancelSuccess'));
+              }
+            } catch (error) {
+              Alert.alert(t('common.error'), error instanceof Error ? error.message : String(error));
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleSelect = (tier: SubscriptionTier) => {
     if (tier === currentTier) return;
@@ -258,6 +288,22 @@ export default function SubscriptionScreen() {
           <Text style={styles.recurringText}>{t('subscription.recurringNotice')}</Text>
         </View>
 
+        {/* Cancel subscription — only shown for active paid plans */}
+        {currentTier !== 'starter' && (
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={handleCancel}
+            disabled={cancelling}
+            activeOpacity={0.7}
+          >
+            {cancelling ? (
+              <ActivityIndicator color={colors.error} size="small" />
+            ) : (
+              <Text style={styles.cancelBtnText}>{t('subscription.cancelPlan')}</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
         <Text style={styles.footnote}>
           {t('subscription.footnote')}
         </Text>
@@ -392,6 +438,18 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+
+  cancelBtn: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  cancelBtnText: {
+    fontSize: fontSize.sm,
+    color: colors.error,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 
   footnote: {

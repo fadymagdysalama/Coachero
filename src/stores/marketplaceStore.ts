@@ -40,6 +40,7 @@ interface MarketplaceState {
   // Coach: subscription
   fetchCoachSubscription: () => Promise<void>;
   upgradeSubscription: (tier: SubscriptionTier) => Promise<{ error: string | null; paymentUrl?: string }>;
+  cancelSubscription: () => Promise<{ error: string | null }>;
 }
 
 export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
@@ -212,10 +213,10 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Use the safe view — excludes payment_token from client-side reads
+    // Explicitly select only non-sensitive columns — payment_token stays server-side only
     const { data } = await supabase
-      .from('coach_subscription_safe')
-      .select('*')
+      .from('coach_subscriptions')
+      .select('id, coach_id, tier, payment_ref, current_period_end, created_at')
       .eq('coach_id', user.id)
       .maybeSingle();
 
@@ -271,5 +272,30 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
     // Return paymentUrl — the screen opens it in the browser.
     // Subscription is recorded by paymob-webhook after successful payment.
     return { error: null, paymentUrl: orderData.paymentUrl };
+  },
+
+  // ─── Coach: cancel subscription (downgrade to starter immediately) ────────
+  cancelSubscription: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const { error } = await supabase
+      .from('coach_subscriptions')
+      .update({
+        tier: 'starter',
+        payment_ref: null,
+        payment_token: null,
+        current_period_end: null,
+      })
+      .eq('coach_id', user.id);
+
+    if (error) return { error: error.message };
+
+    set((s) => ({
+      coachSubscription: s.coachSubscription
+        ? { ...s.coachSubscription, tier: 'starter', payment_ref: null, current_period_end: null }
+        : null,
+    }));
+    return { error: null };
   },
 }));
