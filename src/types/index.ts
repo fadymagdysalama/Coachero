@@ -170,6 +170,7 @@ export interface ClientFeedback {
   client_id: string;
   program_id: string;
   day_id: string;
+  exercise_id: string | null;
   text: string | null;
   video_url: string | null;
   created_at: string;

@@ -57,6 +57,8 @@ interface ProgramState {
   // Client: feedback
   submitFeedback: (programId: string, dayId: string, text: string, videoUrl?: string) => Promise<{ error: string | null }>;
   fetchProgramFeedback: (programId: string) => Promise<{ feedbacks: ClientFeedback[]; error: string | null }>;
+  submitExerciseFeedback: (programId: string, dayId: string, exerciseId: string, text: string) => Promise<{ error: string | null }>;
+  fetchExerciseFeedbacksForCoach: (programId: string) => Promise<{ feedbacks: any[]; error: string | null }>;
 }
 
 export const useProgramStore = create<ProgramState>((set, get) => ({
@@ -467,5 +469,41 @@ export const useProgramStore = create<ProgramState>((set, get) => ({
       .eq('program_id', programId);
 
     return { feedbacks: (data ?? []) as ClientFeedback[], error: error?.message ?? null };
+  },
+
+  // ─── Client: submit exercise-level note ──────────────────────────────────
+  submitExerciseFeedback: async (programId, dayId, exerciseId, text) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated' };
+
+    const { data: existing } = await supabase
+      .from('client_feedback')
+      .select('id')
+      .eq('client_id', user.id)
+      .eq('exercise_id', exerciseId)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from('client_feedback')
+        .update({ text })
+        .eq('id', existing.id);
+      return { error: error?.message ?? null };
+    }
+
+    const { error } = await supabase
+      .from('client_feedback')
+      .insert({ client_id: user.id, program_id: programId, day_id: dayId, exercise_id: exerciseId, text });
+    return { error: error?.message ?? null };
+  },
+
+  // ─── Coach: fetch all clients' exercise notes for a program ──────────────
+  fetchExerciseFeedbacksForCoach: async (programId) => {
+    const { data, error } = await supabase
+      .from('client_feedback')
+      .select('*, client:profiles!client_feedback_client_id_fkey(display_name)')
+      .eq('program_id', programId)
+      .not('exercise_id', 'is', null);
+    return { feedbacks: (data ?? []) as any[], error: error?.message ?? null };
   },
 }));

@@ -109,7 +109,7 @@ export default function ProgramDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentProgram, isLoading, fetchProgramWithDays, completedDayIds, fetchCompletedDays, logWorkout, submitFeedback, fetchProgramFeedback } = useProgramStore();
+  const { currentProgram, isLoading, fetchProgramWithDays, completedDayIds, fetchCompletedDays, logWorkout, submitFeedback, fetchProgramFeedback, submitExerciseFeedback, fetchExerciseFeedbacksForCoach } = useProgramStore();
   const { profile } = useAuthStore();
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [markingDay, setMarkingDay] = useState<string | null>(null);
@@ -117,6 +117,11 @@ export default function ProgramDetailScreen() {
   const [feedbackEditing, setFeedbackEditing] = useState<string | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState('');
   const [savingFeedback, setSavingFeedback] = useState(false);
+  const [exerciseFeedbacks, setExerciseFeedbacks] = useState<Record<string, { id: string; text: string | null }>>({});
+  const [coachExerciseFeedbacks, setCoachExerciseFeedbacks] = useState<Record<string, Array<{ client_name: string; text: string }>>>({});
+  const [exerciseFeedbackEditing, setExerciseFeedbackEditing] = useState<string | null>(null);
+  const [exerciseFeedbackDraft, setExerciseFeedbackDraft] = useState('');
+  const [savingExerciseFeedback, setSavingExerciseFeedback] = useState(false);
 
   const isCoach = profile?.role === 'coach';
 
@@ -126,9 +131,27 @@ export default function ProgramDetailScreen() {
       if (!isCoach) {
         fetchCompletedDays(id);
         fetchProgramFeedback(id).then(({ feedbacks: data }) => {
-          const map: Record<string, { id: string; text: string | null }> = {};
-          for (const f of data) { map[f.day_id] = { id: f.id, text: f.text }; }
-          setFeedbacks(map);
+          const dayMap: Record<string, { id: string; text: string | null }> = {};
+          const exMap: Record<string, { id: string; text: string | null }> = {};
+          for (const f of data) {
+            if (f.exercise_id) {
+              exMap[f.exercise_id] = { id: f.id, text: f.text };
+            } else {
+              dayMap[f.day_id] = { id: f.id, text: f.text };
+            }
+          }
+          setFeedbacks(dayMap);
+          setExerciseFeedbacks(exMap);
+        });
+      } else {
+        fetchExerciseFeedbacksForCoach(id).then(({ feedbacks: data }) => {
+          const grouped: Record<string, Array<{ client_name: string; text: string }>> = {};
+          for (const f of data) {
+            if (!f.exercise_id || !f.text) continue;
+            if (!grouped[f.exercise_id]) grouped[f.exercise_id] = [];
+            grouped[f.exercise_id].push({ client_name: (f as any).client?.display_name ?? 'Client', text: f.text });
+          }
+          setCoachExerciseFeedbacks(grouped);
         });
       }
     }
@@ -174,6 +197,86 @@ export default function ProgramDetailScreen() {
       setFeedbacks((prev) => ({ ...prev, [dayId]: { ...prev[dayId], text: feedbackDraft.trim() } }));
       setFeedbackEditing(null);
     }
+  };
+
+  const handleEditExerciseFeedback = (exerciseId: string) => {
+    setExerciseFeedbackEditing(exerciseId);
+    setExerciseFeedbackDraft(exerciseFeedbacks[exerciseId]?.text ?? '');
+  };
+
+  const handleSaveExerciseFeedback = async (exerciseId: string, dayId: string) => {
+    if (!currentProgram) return;
+    setSavingExerciseFeedback(true);
+    const { error } = await submitExerciseFeedback(currentProgram.id, dayId, exerciseId, exerciseFeedbackDraft.trim());
+    setSavingExerciseFeedback(false);
+    if (error) {
+      Alert.alert(t('common.error'), error);
+    } else {
+      setExerciseFeedbacks((prev) => ({ ...prev, [exerciseId]: { ...prev[exerciseId], text: exerciseFeedbackDraft.trim() } }));
+      setExerciseFeedbackEditing(null);
+    }
+  };
+
+  const renderExNote = (exerciseId: string, dayId: string) => {
+    const coachNotes = coachExerciseFeedbacks[exerciseId];
+    if (isCoach) {
+      if (!coachNotes?.length) return null;
+      return (
+        <View style={styles.coachNoteSection}>
+          <Text style={styles.coachNoteHeader}>{t('programs.clientNotes')}</Text>
+          {coachNotes.map((note, i) => (
+            <View key={i} style={styles.coachNoteEntry}>
+              <Text style={styles.coachNoteClientName}>{note.client_name}</Text>
+              <Text style={styles.coachNoteText}>"{note.text}"</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
+    if (exerciseFeedbackEditing === exerciseId) {
+      return (
+        <View style={styles.exNoteEditBox}>
+          <TextInput
+            style={styles.feedbackInput}
+            value={exerciseFeedbackDraft}
+            onChangeText={setExerciseFeedbackDraft}
+            placeholder={t('programs.exerciseNotePlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            multiline
+            numberOfLines={2}
+          />
+          <View style={styles.feedbackActions}>
+            <TouchableOpacity style={styles.feedbackCancelBtn} onPress={() => setExerciseFeedbackEditing(null)}>
+              <Text style={styles.feedbackCancelText}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.feedbackSaveBtn, savingExerciseFeedback && styles.feedbackSaveBtnDisabled]}
+              onPress={() => handleSaveExerciseFeedback(exerciseId, dayId)}
+              disabled={savingExerciseFeedback}
+            >
+              {savingExerciseFeedback
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={styles.feedbackSaveText}>{t('common.save')}</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    if (exerciseFeedbacks[exerciseId]?.text) {
+      return (
+        <View style={styles.exNoteCard}>
+          <Text style={styles.exNoteText}>"{exerciseFeedbacks[exerciseId].text}"</Text>
+          <TouchableOpacity onPress={() => handleEditExerciseFeedback(exerciseId)}>
+            <Text style={styles.feedbackEditText}>{t('programs.editNote')}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return (
+      <TouchableOpacity style={styles.exNoteAddBtn} onPress={() => handleEditExerciseFeedback(exerciseId)}>
+        <Text style={styles.exNoteAddText}>{t('programs.addExerciseNote')}</Text>
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -264,6 +367,7 @@ export default function ProgramDetailScreen() {
                           {segment.exercises.map(({ ex, idx }, ssIdx) => (
                             <React.Fragment key={ex.id}>
                               <ExerciseCard ex={ex} idx={idx} inSuperset />
+                              {renderExNote(ex.id, day.id)}
                               {ssIdx < segment.exercises.length - 1 && (
                                 <View style={detailStyles.supersetDivider}>
                                   <Text style={detailStyles.supersetDividerText}>↩ continue</Text>
@@ -274,7 +378,12 @@ export default function ProgramDetailScreen() {
                         </View>
                       );
                     }
-                    return <ExerciseCard key={segment.exercise.id} ex={segment.exercise} idx={segment.idx} />;
+                    return (
+                      <React.Fragment key={segment.exercise.id}>
+                        <ExerciseCard ex={segment.exercise} idx={segment.idx} />
+                        {renderExNote(segment.exercise.id, day.id)}
+                      </React.Fragment>
+                    );
                   })
                 )}
                 {/* Mark Complete button – clients only */}
@@ -651,6 +760,29 @@ const styles = StyleSheet.create({
   },
   feedbackSaveBtnDisabled: { opacity: 0.55 },
   feedbackSaveText: { fontSize: fontSize.sm, color: '#fff', fontWeight: '700' },
+
+  // ── Exercise notes ──────────────────────────────────────────────────────
+  exNoteCard: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    justifyContent: 'space-between' as const,
+    gap: spacing.xs,
+  },
+  exNoteText: { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary, fontStyle: 'italic' as const, lineHeight: 18 },
+  exNoteAddBtn: { marginTop: spacing.xs, paddingVertical: spacing.xs, alignSelf: 'flex-start' as const },
+  exNoteAddText: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600' as const },
+  exNoteEditBox: { marginTop: spacing.sm, gap: spacing.xs },
+  coachNoteSection: { marginTop: spacing.sm, gap: spacing.xs },
+  coachNoteHeader: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '700' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  coachNoteEntry: { backgroundColor: colors.surface, borderRadius: borderRadius.md, padding: spacing.sm, borderWidth: 1, borderColor: colors.borderLight },
+  coachNoteClientName: { fontSize: fontSize.xs, color: colors.accent, fontWeight: '700' as const, marginBottom: 2 },
+  coachNoteText: { fontSize: fontSize.xs, color: colors.textSecondary, fontStyle: 'italic' as const, lineHeight: 18 },
 
   // legacy refs kept for coach header actions
   header: {},
