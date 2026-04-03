@@ -228,16 +228,16 @@ function ExerciseRow({
             onChangeText={(v) => onChange('rest_time', v)}
           />
         </View>
-        <View style={[styles.fieldGroup, { flex: 1 }]}>
-          <Text style={styles.miniLabel}>{t('programs.weight')}</Text>
-          <TextInput
-            style={styles.inputMini}
-            placeholder="e.g. 20kg"
-            placeholderTextColor={colors.textMuted}
-            value={ex.weight}
-            onChangeText={(v) => onChange('weight', v)}
-          />
-        </View>
+      </View>
+      <View style={[styles.fieldGroup, { marginTop: spacing.xs }]}>
+        <Text style={styles.miniLabel}>{t('programs.weight')}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. 20kg, bodyweight, 2 x 10lbs"
+          placeholderTextColor={colors.textMuted}
+          value={ex.weight}
+          onChangeText={(v) => onChange('weight', v)}
+        />
       </View>
       <TextInput
         style={[styles.input, { marginTop: spacing.xs }]}
