@@ -88,6 +88,7 @@ export default function HomeScreen() {
   const { myClientMode, clientDataLoaded } = useConnectionStore();
   const { unreadCount, fetchNotifications } = useNotificationStore();
   const [loading, setLoading] = useState(true);
+  const [firstLoad, setFirstLoad] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSessionItem[]>([]);
   const [todayWorkout, setTodayWorkout] = useState<{
@@ -116,7 +117,7 @@ export default function HomeScreen() {
       let isMounted = true;
       // Only show the "—" placeholder on the very first load.
       // On subsequent focus events keep showing the previous data while refreshing silently.
-      if (stats === null) setLoading(true);
+      if (firstLoad) setLoading(true);
 
       const loadDashboard = async () => {
       const now = new Date();
@@ -157,6 +158,7 @@ export default function HomeScreen() {
           primaryLabel: t('home.activeClients'),
           secondaryLabel: t('home.activePrograms'),
         });
+        if (firstLoad) setFirstLoad(false);
 
         const nowC = new Date();
         const filteredCoachSessions = ((sessionsRes.data as any[] | null) ?? []).filter(
@@ -235,6 +237,7 @@ export default function HomeScreen() {
           primaryLabel: 'Sessions Done',
           secondaryLabel: t('home.upcomingSessions'),
         });
+        if (firstLoad) setFirstLoad(false);
         setTodayWorkout(null);
         // Only set loading to false if this is the first load (stats was null)
         if (loading) setLoading(false);
@@ -257,6 +260,7 @@ export default function HomeScreen() {
           primaryLabel: t('home.activePrograms'),
           secondaryLabel: t('home.daysDone'),
         });
+        if (firstLoad) setFirstLoad(false);
 
         // Next workout — use current_day from the assignment to avoid extra round trips.
         // Fetch the day record + its exercises in a single join query.
@@ -341,7 +345,7 @@ export default function HomeScreen() {
         <View style={styles.statsRow}>
           <StatCard
             label={stats?.primaryLabel ?? (isCoach ? t('home.activeClients') : isOnGroundClient ? 'Sessions Done' : t('home.activePrograms'))}
-            value={loading ? '—' : String(stats?.primaryCount ?? 0)}
+            value={firstLoad ? '—' : String(stats?.primaryCount ?? 0)}
             accent
             onPress={() => {
               if (isCoach) router.push('/(tabs)/clients');
@@ -351,7 +355,7 @@ export default function HomeScreen() {
           />
           <StatCard
             label={stats?.secondaryLabel ?? (isCoach ? t('home.activePrograms') : isOnGroundClient ? t('home.upcomingSessions') : t('home.daysDone'))}
-            value={loading ? '—' : String(stats?.secondaryCount ?? 0)}
+            value={firstLoad ? '—' : String(stats?.secondaryCount ?? 0)}
             onPress={() => {
               if (isCoach) router.push('/(tabs)/programs');
               else if (isOnGroundClient) router.push('/(tabs)/schedule');
