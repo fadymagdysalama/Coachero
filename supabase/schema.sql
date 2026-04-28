@@ -542,6 +542,7 @@ CREATE TABLE IF NOT EXISTS coach_subscriptions (
   coach_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE UNIQUE,
   tier TEXT NOT NULL DEFAULT 'starter' CHECK (tier IN ('starter', 'pro')),
   payment_ref TEXT,
+  payment_token TEXT,
   current_period_end TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

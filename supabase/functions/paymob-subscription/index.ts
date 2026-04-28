@@ -12,8 +12,8 @@
 // =====================================================
 
 const TIER_PRICES_CENTS: Record<string, number> = {
-  pro: 19900,       // 199 EGP
-  business: 49900,  // 499 EGP
+  pro: 25000,    // 250 EGP
+  business: 49900, // 499 EGP
 };
 
 Deno.serve(async (req: Request) => {
@@ -191,6 +191,13 @@ Deno.serve(async (req: Request) => {
   const { token: paymentKey } = JSON.parse(paymentKeyResponseText || '{}');
   // Append redirect_url as a query param so Paymob redirects back to the app after payment
   const paymentUrl = `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${paymentKey}&redirect_url=${encodeURIComponent('coachera://')}`;
+
+  console.log(`[paymob-subscription] subscription request for ${tier} tier:`, {
+    userId,
+    amountCents,
+    integrationId,
+    paymentKeyResponse: paymentKeyResponseText.substring(0, 200) // Log first 200 chars
+  });
 
   return new Response(JSON.stringify({ paymentUrl }), {
     headers: {
