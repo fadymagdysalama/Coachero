@@ -330,3 +330,12 @@ npx expo run:ios
 # Run on Android
 npx expo run:android
 ```
+
+# Splash screen (all scales)
+cp assets/splash-icon.png "ios/Coachera/Images.xcassets/SplashScreenLegacy.imageset/image.png"
+cp assets/splash-icon.png "ios/Coachera/Images.xcassets/SplashScreenLegacy.imageset/image@2x.png"
+cp assets/splash-icon.png "ios/Coachera/Images.xcassets/SplashScreenLegacy.imageset/image@3x.png"
+
+# App icon (must be 1024×1024)
+cp assets/icon.png "ios/Coachera/Images.xcassets/AppIcon.appiconset/App-Icon-1024x1024@1x.png"
+```
