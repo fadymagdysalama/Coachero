@@ -44,7 +44,7 @@ function AnimatedSplash({ onDone }: { onDone: () => void }) {
   return (
     <Animated.View style={[styles.splash, { opacity: screenOpacity }]} onLayout={handleLayout}>
       <Animated.Image
-        source={require('../assets/icon.png')}
+        source={require('../assets/home.png')}
         style={[styles.logo, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}
       />
       <Animated.Text
@@ -98,16 +98,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 140,
-    height: 140,
-    borderRadius: 28,
+    width: 450,
+    height: 450,
+    borderRadius: 58,
   },
   wordmark: {
     color: '#FFFFFF',
-    fontSize: 30,
+    fontSize: 40,
     fontWeight: '700',
     letterSpacing: 7,
-    marginTop: 22,
+    marginTop: -8,
+    marginLeft: 16,
   },
   dark: {
     flex: 1,
