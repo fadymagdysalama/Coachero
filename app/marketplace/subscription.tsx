@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   AppState,
+  Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -142,13 +143,24 @@ export default function SubscriptionScreen() {
               if (result.error) {
                 showAlert({ title: t('common.error'), message: result.error });
               } else if (result.paymentUrl) {
-                // Paid tier — open Paymob in Safari View Controller.
-                // openAuthSessionAsync automatically closes and returns to the app
-                // when Paymob redirects to the coachera:// scheme.
+                // Paid tier — open Paymob payment page
                 awaitingPayment.current = true;
-                await WebBrowser.openAuthSessionAsync(result.paymentUrl, 'coachera://');
-                awaitingPayment.current = false;
-                fetchCoachSubscription();
+                if (Platform.OS === 'web') {
+                  // Web: open payment URL in new window
+                  window.open(result.paymentUrl, '_blank');
+                  // On web, user will need to close window manually or use back button
+                  // Check subscription after a delay since we can't detect the redirect
+                  setTimeout(() => {
+                    awaitingPayment.current = false;
+                    fetchCoachSubscription();
+                  }, 3000);
+                } else {
+                  // Native: openAuthSessionAsync automatically closes and returns to the app
+                  // when Paymob redirects to the coachera:// scheme.
+                  await WebBrowser.openAuthSessionAsync(result.paymentUrl, 'coachera://');
+                  awaitingPayment.current = false;
+                  fetchCoachSubscription();
+                }
               } else {
                 // Free tier (starter) — immediate
                 showAlert({ title: t('subscription.upgradeSuccess') });

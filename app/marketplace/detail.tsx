@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   AppState,
+  Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -93,9 +94,19 @@ export default function MarketplaceDetailScreen() {
               if (error) {
                 showAlert({ title: t('common.error'), message: error });
               } else if (paymentUrl) {
-                // Open Paymob in Safari View Controller; auto-closes when Paymob redirects to coachera://
-                await WebBrowser.openAuthSessionAsync(paymentUrl, 'coachera://');
-                fetchMyPurchases();
+                // Open Paymob payment page
+                if (Platform.OS === 'web') {
+                  // Web: open payment URL in new window
+                  window.open(paymentUrl, '_blank');
+                  // On web, check purchases after a delay
+                  setTimeout(() => {
+                    fetchMyPurchases();
+                  }, 3000);
+                } else {
+                  // Native: auto-closes when Paymob redirects to coachera://
+                  await WebBrowser.openAuthSessionAsync(paymentUrl, 'coachera://');
+                  fetchMyPurchases();
+                }
               } else {
                 // Free program acquired
                 showAlert({
