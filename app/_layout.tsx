@@ -93,7 +93,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   splash: {
     flex: 1,
-    backgroundColor: '#020913',
+    backgroundColor: '#004aad',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -111,6 +111,6 @@ const styles = StyleSheet.create({
   },
   dark: {
     flex: 1,
-    backgroundColor: '#020913',
+    backgroundColor: '#004aad',
   },
 });
