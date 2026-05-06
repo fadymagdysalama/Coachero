@@ -19,6 +19,9 @@
       "bundleIdentifier": "com.coachera.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "aps-environment": "development"
       }
     },
     "android": {
