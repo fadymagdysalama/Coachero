@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  let body: { receipt?: string; productId?: string; userId?: string };
+  let body: { receipt?: string; transactionId?: string; productId?: string; userId?: string };
   try {
     body = await req.json();
   } catch {
@@ -55,10 +55,24 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const { receipt, productId } = body;
+  const { receipt, transactionId, productId } = body;
 
-  if (!receipt) {
-    return new Response(JSON.stringify({ error: 'Missing receipt data' }), {
+  if (!receipt && !transactionId) {
+    return new Response(JSON.stringify({ error: 'Missing receipt data or transaction ID' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // If we have receipt, verify it; otherwise try with transaction ID
+  if (!receipt && transactionId) {
+    console.log('[verify-iap-subscription] No receipt, attempting verification with transaction ID:', transactionId);
+    // For StoreKit 2, we'd need to use App Store Server API to verify by transaction ID
+    // For now, we'll return an error asking for receipt
+    return new Response(JSON.stringify({ 
+      error: 'Receipt required. Please ensure you have a valid receipt.',
+      needsReceipt: true,
+    }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -120,6 +134,8 @@ Deno.serve(async (req: Request) => {
   // Extract subscription info from Apple's response
   const latestReceiptInfo = appleData.latest_receipt_info;
   
+  console.log('[verify-iap-subscription] Receipt info keys:', latestReceiptInfo ? Object.keys(latestReceiptInfo) : 'none');
+  
   if (!latestReceiptInfo) {
     return new Response(JSON.stringify({ error: 'No receipt info found' }), {
       status: 400,
@@ -129,7 +145,31 @@ Deno.serve(async (req: Request) => {
 
   // Determine tier based on product ID
   let tier: 'pro' = 'pro';
-  const periodEnd = new Date(parseInt(latestReceiptInfo.expires_date_ms as string)).toISOString();
+  
+  // Handle different date formats from Apple
+  let periodEnd: string;
+  const expiresMs = latestReceiptInfo.expires_date_ms;
+  const expiresDate = latestReceiptInfo.expires_date;
+  
+  if (expiresMs) {
+    periodEnd = new Date(parseInt(expiresMs as string)).toISOString();
+  } else if (expiresDate) {
+    // Could be in seconds (Unix timestamp) or different format
+    const parsed = parseInt(expiresDate as string);
+    if (parsed > 1e12) {
+      // Already milliseconds
+      periodEnd = new Date(parsed).toISOString();
+    } else {
+      // Seconds - convert to milliseconds
+      periodEnd = new Date(parsed * 1000).toISOString();
+    }
+  } else {
+    // Fallback: use current date + 1 month
+    const futureDate = new Date();
+    futureDate.setMonth(futureDate.getMonth() + 1);
+    periodEnd = futureDate.toISOString();
+    console.log('[verify-iap-subscription] No expiry in receipt, using fallback:', periodEnd);
+  }
 
   // Update coach subscription in the database
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
