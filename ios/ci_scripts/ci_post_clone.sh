@@ -26,7 +26,7 @@ echo "Installing Node dependencies"
 npm install || { echo "npm install failed"; exit 1; }
 
 echo "Running prebuild for iOS"
-npx expo prebuild --platform ios --clean --yes || { echo "prebuild failed"; exit 1; }
+npx expo prebuild --platform ios --clean || { echo "prebuild failed"; exit 1; }
 
 echo "Installing CocoaPods"
 cd ios || { echo "cd ios failed"; exit 1; }
