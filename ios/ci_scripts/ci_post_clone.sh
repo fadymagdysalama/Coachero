@@ -1,23 +1,23 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
-# Source nvm if available (Xcode Cloud typically has Node via nvm)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/../.." || exit 1
+
+# Install nvm if not available
 export NVM_DIR="$HOME/.nvm"
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-    source "$NVM_DIR/nvm.sh"
+if [ ! -d "$NVM_DIR" ]; then
+    echo "Installing nvm..."
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 fi
 
-# Fallback: find node in common locations
-if ! command -v node >/dev/null 2>&1; then
-    for dir in /usr/local/bin /opt/homebrew/bin "$HOME/.nvm/versions/node/"*; do
-        if [ -x "$dir/node" ]; then
-            export PATH="$dir:$PATH"
-            break
-        fi
-    done
-fi
+# Source nvm
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
-cd "$(dirname "$0")/../.." || exit 1
+# Install and use Node.js 20
+echo "Installing Node.js..."
+nvm install 20
+nvm use 20
 
 echo "Node version: $(node --version)"
 echo "NPM version: $(npm --version)"
