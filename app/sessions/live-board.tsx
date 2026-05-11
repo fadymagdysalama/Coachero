@@ -303,13 +303,16 @@ function ExercisePanel({
 function ExerciseEditPanel({
   exercises,
   onUpdate,
+  onAdd,
+  onDelete,
   onClose,
 }: {
   exercises: Exercise[];
   onUpdate: (exIdx: number, patch: Partial<Exercise>) => void;
+  onAdd: () => void;
+  onDelete: (exIdx: number) => void;
   onClose: () => void;
 }) {
-  if (exercises.length === 0) return null;
   return (
     <View style={styles.editPanel}>
       <View style={styles.editPanelHeader}>
@@ -319,7 +322,13 @@ function ExerciseEditPanel({
         </TouchableOpacity>
       </View>
       {exercises.map((ex, idx) => (
-        <View key={ex.id} style={styles.editPanelRow}>
+        <View key={ex.id || `new-${idx}`} style={styles.editPanelRow}>
+          <View style={styles.editPanelRowHeader}>
+            <Text style={styles.editPanelExerciseNum}>Exercise {idx + 1}</Text>
+            <TouchableOpacity onPress={() => onDelete(idx)} activeOpacity={0.7}>
+              <Text style={styles.editPanelDelete}>Delete</Text>
+            </TouchableOpacity>
+          </View>
           <TextInput
             style={styles.editPanelNameInput}
             value={ex.name}
@@ -338,7 +347,7 @@ function ExerciseEditPanel({
                 maxLength={2}
               />
             </View>
-            <View style={[styles.editPanelMiniGroup, { flex: 2 }]}>
+            <View style={styles.editPanelMiniGroup}>
               <Text style={styles.editPanelLabel}>Reps</Text>
               <TextInput
                 style={styles.editPanelMini}
@@ -348,9 +357,22 @@ function ExerciseEditPanel({
                 placeholderTextColor={colors.textMuted}
               />
             </View>
+            <View style={[styles.editPanelMiniGroup, { flex: 2 }]}>
+              <Text style={styles.editPanelLabel}>Weight</Text>
+              <TextInput
+                style={styles.editPanelMini}
+                value={ex.weight ?? ''}
+                onChangeText={(v) => onUpdate(idx, { weight: v })}
+                placeholder="e.g. 50kg"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
           </View>
         </View>
       ))}
+      <TouchableOpacity style={styles.addExerciseBtn} onPress={onAdd} activeOpacity={0.7}>
+        <Text style={styles.addExerciseBtnText}>+ Add Exercise</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -359,21 +381,34 @@ function ExerciseEditPanel({
 
 function OnlineClientSlot({
   attendee,
+  attendeeIndex,
   onSetDoneAtIndex,
   onNoteChange,
   onAssignmentChange,
   onGroupChange,
   onUpdateExercise,
+  onAddExercise,
+  onDeleteExercise,
+  onSaveAndClose,
 }: {
   attendee: OnlineAttendee;
+  attendeeIndex: number;
   onSetDoneAtIndex: (exIdx: number, sets: number) => void;
   onNoteChange: (text: string) => void;
   onAssignmentChange: (index: number) => void;
   onGroupChange: (groupIdx: number) => void;
   onUpdateExercise: (exIdx: number, patch: Partial<Exercise>) => void;
+  onAddExercise: () => void;
+  onDeleteExercise: (exIdx: number) => void;
+  onSaveAndClose: () => Promise<boolean>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const slot = attendee.assignments[attendee.assignmentIndex] ?? null;
+
+  const handleClose = async () => {
+    await onSaveAndClose();
+    setIsEditing(false);
+  };
 
   return (
     <View style={styles.clientCard}>
@@ -387,7 +422,7 @@ function OnlineClientSlot({
             <Text style={styles.clientCardSub}>No program assigned</Text>
           )}
         </View>
-        {slot && slot.exercises.length > 0 && (
+        {slot && (
           <TouchableOpacity
             style={[styles.editWorkoutBtn, isEditing && styles.editWorkoutBtnActive]}
             onPress={() => setIsEditing((v) => !v)}
@@ -410,7 +445,9 @@ function OnlineClientSlot({
         <ExerciseEditPanel
           exercises={slot?.exercises ?? []}
           onUpdate={onUpdateExercise}
-          onClose={() => setIsEditing(false)}
+          onAdd={onAddExercise}
+          onDelete={onDeleteExercise}
+          onClose={handleClose}
         />
       ) : (
         <ExercisePanel slot={slot} onSetDoneAtIndex={onSetDoneAtIndex} onGroupChange={onGroupChange} />
@@ -433,21 +470,34 @@ function OnlineClientSlot({
 
 function OfflineClientSlot({
   attendee,
+  attendeeIndex,
   onSetDoneAtIndex,
   onNoteChange,
   onAssignmentChange,
   onGroupChange,
   onUpdateExercise,
+  onAddExercise,
+  onDeleteExercise,
+  onSaveAndClose,
 }: {
   attendee: OfflineAttendee;
+  attendeeIndex: number;
   onSetDoneAtIndex: (exIdx: number, sets: number) => void;
   onNoteChange: (text: string) => void;
   onAssignmentChange: (index: number) => void;
   onGroupChange: (groupIdx: number) => void;
   onUpdateExercise: (exIdx: number, patch: Partial<Exercise>) => void;
+  onAddExercise: () => void;
+  onDeleteExercise: (exIdx: number) => void;
+  onSaveAndClose: () => Promise<boolean>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const slot = attendee.assignments[attendee.assignmentIndex] ?? null;
+
+  const handleClose = async () => {
+    await onSaveAndClose();
+    setIsEditing(false);
+  };
 
   return (
     <View style={[styles.clientCard, styles.clientCardOffline]}>
@@ -463,7 +513,7 @@ function OfflineClientSlot({
             </View>
           )}
         </View>
-        {slot && slot.exercises.length > 0 && (
+        {slot && (
           <TouchableOpacity
             style={[styles.editWorkoutBtn, isEditing && styles.editWorkoutBtnActive]}
             onPress={() => setIsEditing((v) => !v)}
@@ -486,7 +536,9 @@ function OfflineClientSlot({
         <ExerciseEditPanel
           exercises={slot?.exercises ?? []}
           onUpdate={onUpdateExercise}
-          onClose={() => setIsEditing(false)}
+          onAdd={onAddExercise}
+          onDelete={onDeleteExercise}
+          onClose={handleClose}
         />
       ) : (
         <ExercisePanel slot={slot} onSetDoneAtIndex={onSetDoneAtIndex} onGroupChange={onGroupChange} />
@@ -791,6 +843,136 @@ export default function LiveBoardScreen() {
     });
   }
 
+  function addSlotExercise(attendeeIndex: number) {
+    setAttendees((prev) => {
+      const next = [...prev];
+      const a = { ...prev[attendeeIndex] };
+      const assignments = [...a.assignments];
+      const slot = { ...assignments[a.assignmentIndex] };
+      const exercises = [...slot.exercises];
+      const newId = `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      exercises.push({
+        id: newId,
+        name: '',
+        sets: 3,
+        reps: '10',
+        restTime: '60s',
+        notes: null,
+        supersetGroup: null,
+        weight: null,
+      });
+      const sd = [...slot.setsDone, 0];
+      slot.exercises = exercises;
+      slot.setsDone = sd;
+      assignments[a.assignmentIndex] = slot;
+      a.assignments = assignments;
+      next[attendeeIndex] = a as Attendee;
+      attendeesRef.current = next;
+      return next;
+    });
+  }
+
+  function deleteSlotExercise(attendeeIndex: number, exIdx: number) {
+    setAttendees((prev) => {
+      const next = [...prev];
+      const a = { ...prev[attendeeIndex] };
+      const assignments = [...a.assignments];
+      const slot = { ...assignments[a.assignmentIndex] };
+      const exercises = slot.exercises.filter((_, i) => i !== exIdx);
+      const sd = slot.setsDone.filter((_, i) => i !== exIdx);
+      slot.exercises = exercises;
+      slot.setsDone = sd;
+      assignments[a.assignmentIndex] = slot;
+      a.assignments = assignments;
+      next[attendeeIndex] = a as Attendee;
+      attendeesRef.current = next;
+      return next;
+    });
+  }
+
+  async function saveSlotExercisesToDb(attendeeIndex: number): Promise<boolean> {
+    const attendee = attendeesRef.current[attendeeIndex];
+    if (!attendee) return false;
+
+    const slot = attendee.assignments[attendee.assignmentIndex];
+    if (!slot) return false;
+
+    const { data: dayRow } = await supabase
+      .from('program_days')
+      .select('id')
+      .eq('program_id', slot.programId)
+      .eq('day_number', slot.currentDay)
+      .maybeSingle();
+
+    if (!dayRow) {
+      console.warn('Could not find day for program:', slot.programId, slot.currentDay);
+      return false;
+    }
+
+    const dayId = dayRow.id;
+
+    const existingIds = new Set<string>();
+    const currentExercises = slot.exercises;
+
+    for (const ex of currentExercises) {
+      if (ex.id.startsWith('new-')) {
+        if (!ex.name.trim()) continue;
+
+        const { error: insertErr } = await supabase.from('program_exercises').insert({
+          day_id: dayId,
+          exercise_name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          rest_time: ex.restTime,
+          notes: ex.notes,
+          superset_group: ex.supersetGroup,
+          weight: ex.weight,
+          order_index: currentExercises.indexOf(ex),
+        });
+
+        if (insertErr) {
+          console.error('Error inserting exercise:', insertErr);
+          return false;
+        }
+      } else {
+        existingIds.add(ex.id);
+
+        const { error: updateErr } = await supabase
+          .from('program_exercises')
+          .update({
+            exercise_name: ex.name,
+            sets: ex.sets,
+            reps: ex.reps,
+            rest_time: ex.restTime,
+            notes: ex.notes,
+            superset_group: ex.supersetGroup,
+            weight: ex.weight,
+          })
+          .eq('id', ex.id);
+
+        if (updateErr) {
+          console.error('Error updating exercise:', updateErr);
+          return false;
+        }
+      }
+    }
+
+    const { data: allExercises } = await supabase
+      .from('program_exercises')
+      .select('id')
+      .eq('day_id', dayId);
+
+    if (allExercises) {
+      for (const ex of allExercises) {
+        if (!existingIds.has(ex.id)) {
+          await supabase.from('program_exercises').delete().eq('id', ex.id);
+        }
+      }
+    }
+
+    return true;
+  }
+
   async function completeSession(): Promise<{ ok: boolean; errors: string[] }> {
     const errors: string[] = [];
     const current = attendeesRef.current;
@@ -1018,6 +1200,7 @@ export default function LiveBoardScreen() {
                 <OnlineClientSlot
                   key={attendee.profile.id}
                   attendee={attendee}
+                  attendeeIndex={idx}
                   onSetDoneAtIndex={(exIdx, sets) => updateSetsDone(idx, exIdx, sets)}
                   onNoteChange={(text) =>
                     updateAttendee(idx, { note: text } as Partial<OnlineAttendee>)
@@ -1025,6 +1208,9 @@ export default function LiveBoardScreen() {
                   onAssignmentChange={(aIdx) => updateAssignmentIndex(idx, aIdx)}
                   onGroupChange={(gIdx) => updateExerciseIndex(idx, gIdx)}
                   onUpdateExercise={(exIdx, patch) => updateSlotExercise(idx, exIdx, patch)}
+                  onAddExercise={() => addSlotExercise(idx)}
+                  onDeleteExercise={(exIdx) => deleteSlotExercise(idx, exIdx)}
+                  onSaveAndClose={() => saveSlotExercisesToDb(idx)}
                 />
               );
             }
@@ -1032,6 +1218,7 @@ export default function LiveBoardScreen() {
               <OfflineClientSlot
                 key={attendee.client.id}
                 attendee={attendee}
+                attendeeIndex={idx}
                 onSetDoneAtIndex={(exIdx, sets) => updateSetsDone(idx, exIdx, sets)}
                 onNoteChange={(text) =>
                   updateAttendee(idx, { note: text } as Partial<OfflineAttendee>)
@@ -1039,6 +1226,9 @@ export default function LiveBoardScreen() {
                 onAssignmentChange={(aIdx) => updateAssignmentIndex(idx, aIdx)}
                 onGroupChange={(gIdx) => updateExerciseIndex(idx, gIdx)}
                 onUpdateExercise={(exIdx, patch) => updateSlotExercise(idx, exIdx, patch)}
+                onAddExercise={() => addSlotExercise(idx)}
+                onDeleteExercise={(exIdx) => deleteSlotExercise(idx, exIdx)}
+                onSaveAndClose={() => saveSlotExercisesToDb(idx)}
               />
             );
           })}
@@ -1362,5 +1552,37 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.text,
     textAlign: 'center',
+  },
+
+  editPanelRowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  editPanelExerciseNum: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  editPanelDelete: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.error,
+  },
+
+  addExerciseBtn: {
+    backgroundColor: colors.primary + '15',
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  addExerciseBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
